@@ -60,6 +60,11 @@ This document tracks the FSM-first implementation progress and guides future dev
     * **Created**: docs/DEPRECATION-GUIDE.md with comprehensive migration guide
     * **Added**: Deprecation warnings to key methods and class headers
 
+* [ ] **Task: Eliminate Remaining Direct State Checks**
+    * **Action**: Final audit to ensure all `is_plugin_active()` calls use StateManager wrappers
+    * **Priority**: Critical for maintaining FSM as single source of truth
+    * **Validation**: Ensure all components query FSM state, not WordPress directly
+
 * [ ] **Task: Enhanced Documentation**
     * **Action**: Document FSM architecture patterns and best practices
     * **Coverage**: State transition rules, error handling patterns, SSE integration
@@ -218,14 +223,18 @@ The core FSM implementation is **complete and production-ready**. All critical s
 
 ### **Next Steps: Production Hardening**
 
-While the core FSM is complete, the Gemini audit identified valuable areas for long-term maintainability:
+While the core FSM is complete, the audit identified valuable areas for long-term maintainability:
 
-1. **Automated Testing** - Critical for preventing regressions
-2. **Code Documentation** - Deprecate legacy methods and document patterns
-3. **Performance Optimization** - Fine-tune caching and state persistence
-4. **Advanced Features** - State history, batch operations, error analytics
+1. **Automated Testing** - Critical for preventing regressions and validating state transitions
+2. **Final State Check Elimination** - Ensure all components use FSM as single source of truth
+3. **Code Documentation** - Deprecate legacy methods and document FSM patterns
+4. **Performance Optimization** - Fine-tune caching and state persistence
+5. **Advanced Features** - State history, batch operations, error analytics
 
 The system is ready for production use with the current implementation providing a solid, maintainable foundation for future enhancements.
+
+### **Audit Integration Notes**
+*Based on AUDIT-GEMINI.md review - most items already completed, remaining integrated above*
 
 * **Anti-Patterns to Avoid 🚨**
     * ❌ Do not add "helper" methods that bypass the FSM.

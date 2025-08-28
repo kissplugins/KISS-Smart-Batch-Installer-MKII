@@ -1,5 +1,8 @@
 🎯 Key Areas for Improvement for 1.0.31 - 08-28-2025
 
+**⚠️ DEPRECATED DOCUMENT - See PROJECT-FSM.md for current status**
+*Most items below have been completed. Remaining issues integrated into PROJECT-FSM.md Priority 2 tasks.*
+
 1. Eliminate Remaining Direct State Checks
 
 The most critical remaining gap is the existence of code that queries WordPress state directly instead of consulting the FSM. This undermines the FSM's role as the single source of truth.

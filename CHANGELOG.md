@@ -5,8 +5,23 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.32] - 2025-08-28
+
+### Fixed
+- **CRITICAL**: Plugin activation error - "Call to a member function get() on null"
+- Fixed container initialization timing issue where activation hook ran before container was created
+- Added container initialization check in activation/deactivation hooks with graceful fallback
+
+### Enhanced
+- **Self Tests**: Expanded comprehensive test suite with 5 new test categories
+- Added Regression Protection Tests to prevent bug reoccurrence
+- Added Plugin Detection Reliability Tests with timeout protection validation
+- Added GitHub API Resilience Tests with retry logic and error handling validation
+- Added FSM Processing Lock Tests to validate concurrent operation protection
+- Added FSM Validation & Transition Tests for complete state machine validation
+- Enhanced test coverage from basic functionality to production-grade reliability testing
+
 ## [1.0.30] - 2025-08-26
-## [1.0.31] - 2025-08-26
 
 All FSM Goals Met:
 
