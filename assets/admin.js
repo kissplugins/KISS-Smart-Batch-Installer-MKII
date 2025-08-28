@@ -56,6 +56,69 @@
             window.SBI.logSSE = logSSE;
         } catch(_){}
 
+    /**
+     * Session and nonce management
+     */
+    SBI.refreshNonce = function() {
+        return new Promise(function(resolve, reject) {
+            $.ajax({
+                url: sbiAjax.ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'sbi_refresh_nonce'
+                },
+                timeout: 10000
+            })
+            .done(function(response) {
+                if (response.success && response.data.nonce) {
+                    // Update global nonce
+                    sbiAjax.nonce = response.data.nonce;
+                    if (window.sbiDebug) {
+                        window.sbiDebug.addEntry('success', 'Nonce Refresh', 'Nonce refreshed successfully');
+                    }
+                    resolve(response.data.nonce);
+                } else {
+                    var errorMsg = (response.data && response.data.message) || 'Failed to refresh nonce';
+                    if (window.sbiDebug) {
+                        window.sbiDebug.addEntry('error', 'Nonce Refresh', errorMsg);
+                    }
+                    reject(new Error(errorMsg));
+                }
+            })
+            .fail(function(xhr, status, error) {
+                var errorMsg = 'Nonce refresh failed: ' + error;
+                if (xhr.status === 403) {
+                    errorMsg = 'Session expired. Please refresh the page and log in again.';
+                }
+                if (window.sbiDebug) {
+                    window.sbiDebug.addEntry('error', 'Nonce Refresh', errorMsg);
+                }
+                reject(new Error(errorMsg));
+            });
+        });
+    };
+
+    /**
+     * Handle 403 errors with automatic nonce refresh
+     */
+    SBI.handle403Error = function(originalRequest) {
+        if (window.sbiDebug) {
+            window.sbiDebug.addEntry('warning', 'Session Issue', 'Attempting to refresh nonce due to 403 error');
+        }
+
+        return SBI.refreshNonce().then(function(newNonce) {
+            // Update the original request with new nonce
+            if (originalRequest && originalRequest.data) {
+                originalRequest.data.nonce = newNonce;
+            }
+            return newNonce;
+        }).catch(function(error) {
+            // If nonce refresh fails, show user-friendly message
+            SBI.showMessage('Your session has expired. Please refresh the page and try again.', 'error');
+            throw error;
+        });
+    };
+
     SBI.initDebugSystem = function() {
         // Create global debug object if it doesn't exist
         if (typeof window.sbiDebug === 'undefined') {
@@ -183,6 +246,9 @@
 
             // Attempt to use TypeScript handler if available; fallback to jQuery AJAX
             if (window.SBIts && typeof window.SBIts.installPlugin === 'function') {
+                if (window.sbiDebug) {
+                    window.sbiDebug.addEntry('info', 'Install Method', 'Using TypeScript handler for installation');
+                }
                 window.SBIts.installPlugin(window, owner, repository, false)
                     .then(function(response) {
                         try {
@@ -271,7 +337,7 @@
                                         errorMessage += '\nDownload URL: ' + response.data.download_url;
                                     }
                                 } catch(_) {}
-                                SBI.showMessage(errorMessage, 'error');
+                                SBI.showMessage(errorMessage, 'error', 'install');
                                 $button.prop('disabled', false).text('Install');
                             }
                         } catch (e) {
@@ -281,18 +347,37 @@
                         }
                     })
                     .catch(function(err) {
-                        // Mirror .fail diagnostics as much as possible
-                        if (window.sbiDebug) {
-                            window.sbiDebug.addEntry('error', 'Install (TS) Failed', String(err && err.serverError && err.serverError.message || err));
+                        // Check if this is a fallback error (TypeScript modules not available)
+                        if (err && err.message && err.message.indexOf('TypeScript modules not available') !== -1) {
+                            if (window.sbiDebug) {
+                                window.sbiDebug.addEntry('info', 'Install Fallback', 'TypeScript handler failed, falling back to jQuery AJAX');
+                            }
+                            // Fall through to jQuery AJAX implementation below
+                        } else {
+                            // Mirror .fail diagnostics as much as possible
+                            if (window.sbiDebug) {
+                                window.sbiDebug.addEntry('error', 'Install (TS) Failed', String(err && err.serverError && err.serverError.message || err));
+                            }
+                            var errorMsg = 'Installation request failed. Please try again.';
+                            try {
+                                if (err && err.serverError && err.serverError.message) { errorMsg = err.serverError.message; }
+                            } catch(e2){}
+                            SBI.showMessage(errorMsg, 'error', 'install');
+                            $button.prop('disabled', false).text('Install');
+                            return; // Don't fall through to jQuery AJAX
                         }
-                        var errorMsg = 'Installation request failed. Please try again.';
-                        try {
-                            if (err && err.serverError && err.serverError.message) { errorMsg = err.serverError.message; }
-                        } catch(e2){}
-                        SBI.showMessage(errorMsg, 'error');
-                        $button.prop('disabled', false).text('Install');
                     });
-                return;
+
+                // If we get here, either TypeScript succeeded (and returned) or failed with fallback error
+                // Only continue to jQuery AJAX if it was a fallback error
+                if (window.SBIts && typeof window.SBIts.installPlugin === 'function') {
+                    return; // TypeScript handler exists and should handle this
+                }
+            }
+
+            // jQuery AJAX fallback implementation
+            if (window.sbiDebug) {
+                window.sbiDebug.addEntry('info', 'Install Method', 'Using jQuery AJAX fallback for installation');
             }
 
         // NOTE TO FUTURE CONTRIBUTORS AND LLMs:
@@ -409,7 +494,7 @@
                         errorMessage += '\nDownload URL: ' + response.data.download_url;
                     }
                 } catch(_) {}
-                SBI.showMessage(errorMessage, 'error');
+                SBI.showMessage(errorMessage, 'error', 'install');
                 $button.prop('disabled', false).text('Install');
             }
         })
@@ -443,11 +528,77 @@
             if (status === 'timeout') {
                 errorMsg = 'Installation timed out. The plugin may still be installing in the background. Please refresh the page to check if it was installed successfully.';
             } else if (httpCode === 403) {
-                errorMsg = 'Installation blocked (403). Please verify your WordPress nonce/session is valid and you have install_plugins capability.';
+                // Try to refresh nonce and retry the operation
+                SBI.handle403Error({
+                    action: 'sbi_install_plugin',
+                    repository: repository,
+                    owner: owner,
+                    activate: false,
+                    nonce: sbiAjax.nonce
+                }).then(function(newNonce) {
+                    if (window.sbiDebug) {
+                        window.sbiDebug.addEntry('info', 'Retry After Nonce Refresh', 'Retrying installation with new nonce');
+                    }
+                    // Retry the installation with new nonce
+                    SBI.retryInstallation($button, owner, repository, newNonce);
+                }).catch(function() {
+                    errorMsg = 'Session expired. Please refresh the page and try again.';
+                    SBI.showMessage(errorMsg, 'error');
+                    $button.prop('disabled', false).text('Install');
+                });
+                return; // Don't show error message yet, wait for retry result
             } else if (httpCode >= 500 && httpCode <= 599) {
                 errorMsg = 'Server error (' + httpCode + '). Check PHP error logs for fatals and review SBI INSTALL logs.';
             }
 
+            SBI.showMessage(errorMsg, 'error', 'install');
+            $button.prop('disabled', false).text('Install');
+        });
+    };
+
+    /**
+     * Retry installation with new nonce
+     */
+    SBI.retryInstallation = function($button, owner, repository, newNonce) {
+        if (window.sbiDebug) {
+            window.sbiDebug.addEntry('info', 'Retry Installation', 'Retrying installation for ' + owner + '/' + repository);
+        }
+
+        $.ajax({
+            url: sbiAjax.ajaxurl,
+            type: 'POST',
+            timeout: 60000,
+            data: {
+                action: 'sbi_install_plugin',
+                repository: repository,
+                owner: owner,
+                activate: false,
+                nonce: newNonce
+            }
+        })
+        .done(function(response) {
+            // Use the same success handling as the original installation
+            if (response.success) {
+                if (window.sbiDebug) {
+                    window.sbiDebug.addEntry('success', 'Retry Success', 'Installation succeeded after nonce refresh');
+                }
+                SBI.showMessage('Plugin installed successfully (after session refresh)', 'success');
+                $button.text('Installed').removeClass('sbi-install-plugin').removeClass('button-primary').addClass('button-secondary');
+                SBI.refreshRow(repository, $button);
+            } else {
+                var errorMessage = (response.data && response.data.message) || 'Installation failed after retry';
+                if (window.sbiDebug) {
+                    window.sbiDebug.addEntry('error', 'Retry Failed', errorMessage);
+                }
+                SBI.showMessage(errorMessage, 'error');
+                $button.prop('disabled', false).text('Install');
+            }
+        })
+        .fail(function(xhr, status, error) {
+            var errorMsg = 'Installation retry failed: ' + error;
+            if (window.sbiDebug) {
+                window.sbiDebug.addEntry('error', 'Retry Failed', errorMsg);
+            }
             SBI.showMessage(errorMsg, 'error');
             $button.prop('disabled', false).text('Install');
         });
@@ -589,12 +740,94 @@
     };
 
     /**
-     * Show message to user
+     * Parse and format error messages for better user experience
      */
-    SBI.showMessage = function(message, type) {
+    SBI.parseErrorMessage = function(error, context) {
+        var message = 'An unknown error occurred';
+        var details = [];
+
+        // Extract message from various error formats
+        if (typeof error === 'string') {
+            message = error;
+        } else if (error && error.message) {
+            message = error.message;
+        } else if (error && error.data && error.data.message) {
+            message = error.data.message;
+        }
+
+        // Add context-specific guidance
+        if (context === 'install') {
+            if (message.indexOf('404') !== -1 || message.indexOf('not found') !== -1) {
+                details.push('• Verify the repository exists and is public');
+                details.push('• Check the owner and repository names for typos');
+            } else if (message.indexOf('403') !== -1 || message.indexOf('forbidden') !== -1) {
+                details.push('• Your session may have expired - try refreshing the page');
+                details.push('• Verify you have permission to install plugins');
+            } else if (message.indexOf('timeout') !== -1) {
+                details.push('• The installation may still be running in the background');
+                details.push('• Try refreshing the page to check the status');
+            } else if (message.indexOf('download') !== -1) {
+                details.push('• Check your internet connection');
+                details.push('• The repository may be temporarily unavailable');
+            }
+        }
+
+        // Format final message
+        var finalMessage = message;
+        if (details.length > 0) {
+            finalMessage += '\n\nTroubleshooting:\n' + details.join('\n');
+        }
+
+        return finalMessage;
+    };
+
+    /**
+     * Show message to user with improved formatting
+     */
+    SBI.showMessage = function(message, type, context) {
         type = type || 'info';
 
-        var $message = $('<div class="sbi-message ' + type + '">' + message + '</div>');
+        // Parse and enhance error messages
+        if (type === 'error') {
+            message = SBI.parseErrorMessage(message, context);
+        }
+
+        // Remove existing messages
+        $('.sbi-message').remove();
+
+        var messageClass = 'notice notice-' + (type === 'error' ? 'error' : type === 'success' ? 'success' : 'info');
+
+        // Convert newlines to HTML breaks for better formatting
+        var formattedMessage = message.replace(/\n/g, '<br>');
+
+        var $message = $('<div class="sbi-message ' + messageClass + '"><p>' + formattedMessage + '</p></div>');
+
+        // Add dismiss button for error messages
+        if (type === 'error') {
+            $message.addClass('is-dismissible');
+            $message.append('<button type="button" class="notice-dismiss"><span class="screen-reader-text">Dismiss this notice.</span></button>');
+        }
+
+        // Insert after page title or at top of content
+        var $target = $('.wrap h1').first();
+        if ($target.length) {
+            $target.after($message);
+        } else {
+            $('.wrap').prepend($message);
+        }
+
+        // Auto-hide success messages after 5 seconds
+        if (type === 'success') {
+            setTimeout(function() {
+                $message.fadeOut();
+            }, 5000);
+        }
+
+        // Handle dismiss button clicks
+        $message.on('click', '.notice-dismiss', function() {
+            $message.fadeOut();
+        });
+    };
 
     /**
      * Refresh a single repository row using AJAX (no full page reload).

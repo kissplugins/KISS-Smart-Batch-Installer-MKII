@@ -5,12 +5,43 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.33] - 2025-08-28
+
+### Fixed
+- **CRITICAL**: Fixed crypto.randomUUID() compatibility issues causing JavaScript errors in older browsers
+- Added comprehensive browser compatibility fallbacks for UUID generation using crypto.getRandomValues and Math.random
+- **Session Management**: Enhanced nonce verification with detailed error reporting and automatic refresh capability
+- Added automatic nonce refresh functionality to handle session expiration gracefully
+- Improved 403 error handling with automatic retry after nonce refresh
+- **TypeScript Module Loading**: Enhanced TypeScript bridge error handling with graceful fallbacks
+- Added comprehensive fallback implementations when TypeScript modules fail to load
+- Improved module import error handling and debugging information
+- **AJAX Error Handling**: Completely redesigned error message system with context-aware troubleshooting
+- Added intelligent error parsing with user-friendly guidance for common issues
+- Enhanced error message formatting with HTML support and dismiss functionality
+- **JavaScript Compatibility**: Fixed AbortController compatibility issues with proper fallback handling
+- Added comprehensive browser API compatibility checks and warnings
+
+### Enhanced
+- **Error Messages**: Context-aware error messages with specific troubleshooting steps for installation issues
+- **Debug System**: Improved debug logging for TypeScript module loading and session management
+- **User Experience**: Auto-dismissible error messages with better formatting and visual hierarchy
+- **Session Resilience**: Automatic session recovery without requiring full page refresh
+- **Browser Support**: Extended compatibility to older browsers without modern JavaScript APIs
+
 ## [1.0.32] - 2025-08-28
 
 ### Fixed
 - **CRITICAL**: Plugin activation error - "Call to a member function get() on null"
 - Fixed container initialization timing issue where activation hook ran before container was created
 - Added container initialization check in activation/deactivation hooks with graceful fallback
+- **Self Tests**: Fixed raw HTML output issue causing page rendering problems
+- Removed problematic AJAX test that was causing output buffer conflicts
+- Added comprehensive error handling and output buffer management to prevent page crashes
+- **Self Tests**: Fixed CSS styling not loading properly on admin page
+- **CRITICAL**: Fixed session authentication issue caused by improper admin_head hook usage
+- Moved CSS styles back to inline output to prevent WordPress session conflicts
+- Fixed "FSM Enhanced Error Handling" test failure by ensuring clean test state
 
 ### Enhanced
 - **Self Tests**: Expanded comprehensive test suite with 5 new test categories
@@ -20,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added FSM Processing Lock Tests to validate concurrent operation protection
 - Added FSM Validation & Transition Tests for complete state machine validation
 - Enhanced test coverage from basic functionality to production-grade reliability testing
+- Improved test stability and error handling to prevent page rendering issues
 
 ## [1.0.30] - 2025-08-26
 
