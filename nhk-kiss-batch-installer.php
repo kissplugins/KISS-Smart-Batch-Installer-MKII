@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: NHK Smart Batch Installer
+ * Plugin Name: NHK Smart Batch Installer (MKII)
  * Plugin URI: https://github.com/sbi/kiss-smart-batch-installer
  * Description: NHK/KISS (Keep It Simple, Stupid) batch installer using NHK framework for WordPress plugins from GitHub repositories with smart detection and PQS integration.
  * Version: 1.0.31
@@ -110,14 +110,30 @@ function sbi_init() {
 
 /** Activation hook */
 function sbi_activate() {
-    $plugin = sbi_container()->get( SBI\Plugin::class );
-    $plugin->activate();
+    // Initialize container if not already done
+    if ( ! sbi_container() ) {
+        sbi_init();
+    }
+
+    $container = sbi_container();
+    if ( $container ) {
+        $plugin = $container->get( SBI\Plugin::class );
+        $plugin->activate();
+    }
 }
 
 /** Deactivation hook */
 function sbi_deactivate() {
-    $plugin = sbi_container()->get( SBI\Plugin::class );
-    $plugin->deactivate();
+    // Initialize container if not already done
+    if ( ! sbi_container() ) {
+        sbi_init();
+    }
+
+    $container = sbi_container();
+    if ( $container ) {
+        $plugin = $container->get( SBI\Plugin::class );
+        $plugin->deactivate();
+    }
 }
 
 /**
