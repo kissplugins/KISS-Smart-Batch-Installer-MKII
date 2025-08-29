@@ -5,9 +5,40 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.38] - 2024-12-29
+
+### Fixed
+- **Validation Error Debugging**: Enhanced validation failure messages with specific error details
+  - Replaced generic "Failed validations: Wordpress" with detailed error breakdown
+  - Added specific WordPress validation failure details (version, functions, directory permissions)
+  - Enhanced error messages to show exact validation failures (e.g., "Wordpress: Required WordPress function missing: download_url")
+  - Added comprehensive logging for WordPress environment validation failures
+
+### Changed
+- **ValidationGuardService**: More granular validation error reporting
+  - WordPress validation now logs specific failure details (WP version, plugins directory, writability, maintenance mode)
+  - Enhanced error message construction to include specific validation failure details
+  - Improved debugging for installation prerequisite failures
+
+## [1.0.37] - 2024-12-29
+
+### Fixed
+- **Security Error Debugging**: Enhanced security check failure messages with detailed debugging
+  - Replaced generic "Security check failed" with specific error types
+  - Added detailed logging for nonce validation failures (nonce value, action, user ID, referer)
+  - Added detailed logging for capability check failures (user ID, roles, required capability)
+  - Enhanced error guidance with specific recovery steps for nonce and permission issues
+  - Improved error type detection to distinguish between nonce failures and permission issues
+
+### Changed
+- **AjaxHandler Security Validation**: More granular security error reporting
+  - `verify_nonce_and_capability()` now provides specific error messages for nonce vs capability failures
+  - Added comprehensive logging for security validation success and failure cases
+  - Enhanced error guidance system with technical details for troubleshooting
+
 ## [1.0.36] - 2024-12-29
 
-#### Future Integration Discovery for Git Updater
+### Future Integration Discovery for Git Updater
 
 ### Added
 - Added Doc with Git Updater in /docs/PROJECT-KISS-SBI-INTEGRATION.md

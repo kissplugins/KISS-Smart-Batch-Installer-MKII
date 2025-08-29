@@ -389,6 +389,18 @@ class ValidationGuardService {
             $errors[] = 'Plugins directory is not writable';
         }
 
+        // Log WordPress validation details for debugging
+        if ( ! empty( $errors ) ) {
+            error_log( sprintf(
+                'SBI WordPress Validation Failed: %s. Details: WP Version: %s, Plugins Dir: %s, Writable: %s, Maintenance: %s',
+                implode( '; ', $errors ),
+                $wp_version,
+                $plugins_dir,
+                is_writable( $plugins_dir ) ? 'yes' : 'no',
+                file_exists( ABSPATH . '.maintenance' ) ? 'yes' : 'no'
+            ) );
+        }
+
         return [
             'success' => empty( $errors ),
             'errors' => $errors,
