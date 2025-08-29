@@ -430,13 +430,23 @@ class RepositoryListTable extends WP_List_Table {
                         );
                     }
 
-                    $actions[] = sprintf(
-                        '<button type="button" class="button button-secondary sbi-deactivate-plugin" data-repo="%s" data-owner="%s" data-plugin-file="%s">%s</button>',
-                        esc_attr( $repo_name ),
-                        esc_attr( $owner ),
-                        esc_attr( $plugin_file ),
-                        esc_html__( 'Deactivate', 'kiss-smart-batch-installer' )
-                    );
+                    // FSM-centric self-protection check
+                    if ( $this->state_manager->is_self_protected( $repo_full_name ) ) {
+                        // Disable deactivate button for self-protection with helpful tooltip
+                        $actions[] = sprintf(
+                            '<button type="button" class="button button-secondary" disabled title="%s" style="opacity: 0.5; cursor: not-allowed;"><span class="dashicons dashicons-shield" style="font-size: 13px; line-height: 1.2; margin-right: 5px;"></span>%s</button>',
+                            esc_attr__( 'Cannot deactivate: This would remove access to the Smart Batch Installer interface', 'kiss-smart-batch-installer' ),
+                            esc_html__( 'Protected', 'kiss-smart-batch-installer' )
+                        );
+                    } else {
+                        $actions[] = sprintf(
+                            '<button type="button" class="button button-secondary sbi-deactivate-plugin" data-repo="%s" data-owner="%s" data-plugin-file="%s">%s</button>',
+                            esc_attr( $repo_name ),
+                            esc_attr( $owner ),
+                            esc_attr( $plugin_file ),
+                            esc_html__( 'Deactivate', 'kiss-smart-batch-installer' )
+                        );
+                    }
                     break;
             }
         }
@@ -451,6 +461,8 @@ class RepositoryListTable extends WP_List_Table {
 
         return implode( ' ', $actions );
     }
+
+
 
     /**
      * Get plugin settings URL if the plugin has a settings page.

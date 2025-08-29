@@ -46,6 +46,14 @@ class StateManager {
     protected array $states = [];
 
     /**
+     * State metadata storage for additional FSM context.
+     * Stores metadata like self-protection flags, error context, etc.
+     *
+     * @var array<string, array>
+     */
+    private array $state_metadata = [];
+
+    /**
      * Allowed transitions cache.
      *
      * @var array<string, array<string>>
@@ -252,6 +260,109 @@ class StateManager {
     }
 
     /**
+     * Set metadata for a repository state (FSM-centric approach).
+     *
+     * @param string $repository Repository identifier.
+     * @param array $metadata Metadata to store.
+     */
+    public function set_state_metadata(string $repository, array $metadata): void {
+        $this->state_metadata[$repository] = array_merge(
+            $this->state_metadata[$repository] ?? [],
+            $metadata
+        );
+    }
+
+    /**
+     * Get metadata for a repository state (FSM-centric approach).
+     *
+     * @param string $repository Repository identifier.
+     * @param string|null $key Specific metadata key to retrieve.
+     * @return mixed Metadata value or array of all metadata.
+     */
+    public function get_state_metadata(string $repository, ?string $key = null) {
+        $metadata = $this->state_metadata[$repository] ?? [];
+
+        if ($key !== null) {
+            return $metadata[$key] ?? null;
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * Check if repository is self-protected (FSM-centric self-detection).
+     *
+     * @param string $repository Repository identifier.
+     * @return bool True if repository should be protected from deactivation.
+     */
+    public function is_self_protected(string $repository): bool {
+        return $this->get_state_metadata($repository, 'self_protected') === true;
+    }
+
+    /**
+     * Detect and mark self-protection for repositories (FSM-centric approach).
+     *
+     * @param string $repository Repository identifier.
+     * @param string|null $plugin_file Plugin file path for additional verification.
+     */
+    public function detect_and_mark_self_protection(string $repository, ?string $plugin_file = null): void {
+        $is_self = $this->detect_self_plugin($repository, $plugin_file);
+
+        if ($is_self) {
+            $this->set_state_metadata($repository, [
+                'self_protected' => true,
+                'protection_reason' => 'Smart Batch Installer self-protection',
+                'detected_at' => time()
+            ]);
+        }
+    }
+
+    /**
+     * Detect if repository is the Smart Batch Installer itself (FSM-centric detection).
+     *
+     * @param string $repository Repository identifier.
+     * @param string|null $plugin_file Plugin file path for additional verification.
+     * @return bool True if this is the Smart Batch Installer plugin.
+     */
+    private function detect_self_plugin(string $repository, ?string $plugin_file = null): bool {
+        // Method 1: Plugin file path comparison (most reliable when installed)
+        if (!empty($plugin_file)) {
+            // Get current plugin's directory for comparison
+            $current_plugin_file = plugin_basename(__FILE__);
+            $current_plugin_dir = dirname(dirname($current_plugin_file)); // Go up from Services to plugin root
+            $plugin_dir = dirname($plugin_file);
+
+            if ($plugin_dir === $current_plugin_dir) {
+                return true;
+            }
+        }
+
+        // Method 2: Repository name pattern matching
+        $repo_lower = strtolower($repository);
+        $self_patterns = [
+            'kiss-smart-batch-installer',
+            'smart-batch-installer',
+            'batch-installer',
+            'sbi',
+            'kiss-sbi'
+        ];
+
+        foreach ($self_patterns as $pattern) {
+            if (strpos($repo_lower, $pattern) !== false) {
+                return true;
+            }
+        }
+
+        // Method 3: MKII variant detection
+        if (strpos($repo_lower, 'mkii') !== false &&
+            (strpos($repo_lower, 'installer') !== false || strpos($repo_lower, 'batch') !== false)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Get retry count for a repository.
      */
     private function get_retry_count(string $repository): int {
@@ -423,12 +534,21 @@ class StateManager {
     public function refresh_state( string $repository ): void {
         // Move through CHECKING to determined state; bypass transition validation for refresh
         $this->transition( $repository, PluginState::CHECKING, [ 'source' => 'refresh_state' ], true );
+
         // Consolidated detection + cache path
         $state = $this->determine_plugin_state( $repository );
         // If still unknown and not installed, try consolidated detect_plugin_state()
         if ( $state === PluginState::UNKNOWN ) {
             $state = $this->detect_plugin_state( $repository );
         }
+
+        // FSM-centric self-protection detection
+        $plugin_file = null;
+        if (in_array($state, [PluginState::INSTALLED_ACTIVE, PluginState::INSTALLED_INACTIVE], true)) {
+            $plugin_file = $this->getInstalledPluginFile($repository);
+        }
+        $this->detect_and_mark_self_protection($repository, $plugin_file);
+
         $this->transition( $repository, $state, [ 'source' => 'refresh_state' ], true );
     }
 

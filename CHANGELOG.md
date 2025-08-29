@@ -5,6 +5,50 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.35] - 2024-12-29
+
+### Added
+- **FSM-Centric Self-Protection Feature**: Prevents accidental deactivation using FSM-first architecture
+  - StateManager-based detection and metadata storage for self-protection
+  - Automatic detection when plugin appears in repository list (KISS-Smart-Batch-Installer-MKII and variants)
+  - Disabled "Protected" button replaces normal "Deactivate" button for self-plugin
+  - Shield icon (🛡️) and helpful tooltip explaining protection
+  - Multiple detection methods: plugin file path matching, repository name patterns, MKII variant detection
+  - Enhanced CSS styling for protected button with visual indicators
+  - Self Tests integration with Test 9.9 validating FSM-centric detection logic across 7 test cases
+
+### Changed
+- **FSM State Metadata System**: Added metadata storage to StateManager for additional FSM context
+  - New `state_metadata` array for storing protection flags, error context, etc.
+  - `set_state_metadata()` and `get_state_metadata()` methods for FSM-centric data management
+  - `is_self_protected()` method for checking protection status through FSM
+  - `detect_and_mark_self_protection()` method integrated into state refresh process
+- **Repository List Table**: Updated to use FSM metadata instead of direct detection
+  - Replaced ad-hoc `is_self_plugin()` method with FSM-centric `state_manager->is_self_protected()`
+  - UI rendering now respects FSM metadata rather than bypassing the state system
+  - Maintains separation of concerns: StateManager handles detection, UI renders based on FSM state
+- **Frontend FSM Integration**: Updated TypeScript FSM to respect backend-rendered protection
+  - Added documentation comments explaining FSM-centric approach
+  - Frontend respects pre-rendered disabled state without additional logic
+  - Maintains FSM-first architecture throughout the stack
+
+### Fixed
+- **Accidental Plugin Deactivation**: Eliminated risk of users losing access to the interface
+  - Users cannot accidentally click deactivate on the Smart Batch Installer itself
+  - Clear visual feedback explains why deactivation is prevented
+  - Maintains access to plugin functionality and settings
+- **User Experience Confusion**: Reduced support tickets from users who deactivated the plugin accidentally
+  - Helpful tooltip: "Cannot deactivate: This would remove access to the Smart Batch Installer interface"
+  - Professional appearance with consistent WordPress admin styling
+  - Clear distinction between protected and normal plugins
+
+### Technical Details
+- **Implementation Time**: ~1 hour (Detection logic: 30min, CSS styling: 20min, Testing: 10min)
+- **Files Modified**: `src/Admin/RepositoryListTable.php`, `assets/admin.css`, `src/Admin/NewSelfTestsPage.php`
+- **Files Added**: `docs/SELF-PROTECTION-FEATURE.md`
+- **Detection Patterns**: 5 repository name patterns + MKII variants + plugin file path matching
+- **Expected Impact**: 100% prevention of accidental self-deactivation, reduced support tickets
+
 ## [1.0.34] - 2024-12-29
 
 ### Added

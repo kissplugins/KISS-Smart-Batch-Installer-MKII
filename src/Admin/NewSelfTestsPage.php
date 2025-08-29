@@ -898,6 +898,59 @@ class NewSelfTestsPage {
             );
         });
 
+        // Test 9.9: FSM-Centric Self-Protection Feature
+        $suite['tests'][] = $this->run_test( 'FSM-Centric Self-Protection Feature', function() {
+            $container = sbi_container();
+            $state_manager = $container->get( \SBI\Services\StateManager::class );
+
+            // Test various repository names that should be detected as self
+            $test_cases = [
+                'KISS-Smart-Batch-Installer-MKII' => true,
+                'kiss-smart-batch-installer' => true,
+                'Smart-Batch-Installer' => true,
+                'batch-installer-mkii' => true,
+                'sbi' => true,
+                'wordpress/wordpress' => false,
+                'random/plugin' => false
+            ];
+
+            $correct_detections = 0;
+            foreach ( $test_cases as $repo_name => $expected ) {
+                // Test FSM-centric self-protection detection
+                $state_manager->detect_and_mark_self_protection( $repo_name );
+                $is_protected = $state_manager->is_self_protected( $repo_name );
+
+                if ( $is_protected === $expected ) {
+                    $correct_detections++;
+                }
+
+                // Test metadata storage
+                if ( $expected ) {
+                    $metadata = $state_manager->get_state_metadata( $repo_name );
+                    if ( ! isset( $metadata['self_protected'] ) || ! $metadata['self_protected'] ) {
+                        throw new \Exception( "Self-protection metadata not set for {$repo_name}" );
+                    }
+                    if ( ! isset( $metadata['protection_reason'] ) ) {
+                        throw new \Exception( "Protection reason not set for {$repo_name}" );
+                    }
+                }
+            }
+
+            if ( $correct_detections !== count( $test_cases ) ) {
+                throw new \Exception( sprintf(
+                    'FSM self-protection detection failed: %d/%d cases correct',
+                    $correct_detections,
+                    count( $test_cases )
+                ) );
+            }
+
+            return sprintf(
+                'FSM-centric self-protection working: %d/%d test cases passed, metadata properly stored',
+                $correct_detections,
+                count( $test_cases )
+            );
+        });
+
         return $suite;
     }
 

@@ -198,6 +198,35 @@
     white-space: nowrap !important;
 }
 
+/* Protected plugin button styling - prevents accidental deactivation */
+.column-actions .button[disabled] {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    background-color: #f6f7f7 !important;
+    border-color: #ddd !important;
+    color: #666 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+}
+
+.column-actions .button[disabled]:hover,
+.column-actions .button[disabled]:focus {
+    background-color: #f6f7f7 !important;
+    border-color: #ddd !important;
+    color: #666 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Protected button shield icon styling */
+.column-actions .button[disabled] .dashicons-shield {
+    color: #d63638 !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    margin-right: 5px !important;
+    vertical-align: middle !important;
+}
+
 /* Dashicon styling within buttons */
 .sbi-refresh-status .dashicons,
 .column-actions .dashicons {

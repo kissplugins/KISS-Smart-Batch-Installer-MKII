@@ -184,6 +184,10 @@ export class RepositoryFSM {
     if (activateBtn) activateBtn.disabled = state !== PluginState.INSTALLED_INACTIVE;
     if (deactivateBtn) deactivateBtn.disabled = state !== PluginState.INSTALLED_ACTIVE;
 
+    // Note: Self-protection is handled FSM-centrically by the backend StateManager
+    // The backend renders protected buttons directly based on FSM metadata
+    // Frontend respects the pre-rendered disabled state without additional logic
+
     // Enhanced error state handling
     if (isError) {
       this.handleErrorState(row, repo);
