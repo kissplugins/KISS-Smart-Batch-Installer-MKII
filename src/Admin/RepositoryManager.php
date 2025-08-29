@@ -1175,12 +1175,41 @@ class RepositoryManager {
                         setSystemLoading(false);
                         debugLog('🛑 Reset system state for new loading cycle');
 
+                        // 🔍 FSM-FIRST FILTER: Apply any existing filter to repository list BEFORE processing
+                        var filteredRepositories = repositories;
+                        var currentFilterValue = $('#sbi-repository-filter').val();
+
+                        if (currentFilterValue && currentFilterValue.trim()) {
+                            debugLog('🔍 Pre-filtering repositories with: "' + currentFilterValue + '"');
+                            filteredRepositories = repositories.filter(function(repo) {
+                                var searchTerm = currentFilterValue.toLowerCase();
+                                var repoName = (repo.name || '').toLowerCase();
+                                var repoDesc = (repo.description || '').toLowerCase();
+                                var repoOwner = (repo.full_name ? repo.full_name.split('/')[0] : '').toLowerCase();
+
+                                return repoName.includes(searchTerm) ||
+                                       repoDesc.includes(searchTerm) ||
+                                       repoOwner.includes(searchTerm);
+                            });
+
+                            debugLog('🔍 Filtered from ' + repositories.length + ' to ' + filteredRepositories.length + ' repositories');
+
+                            // Update repositories array to only process filtered ones
+                            repositories = filteredRepositories;
+                            totalRepositories = repositories.length;
+                        }
+
                         // Start processing repositories one by one (truly sequential)
                         currentIndex = 0;
                         debugLog('🔄 Starting progressive loading of ' + totalRepositories + ' repositories (limited to ' + repositoryLimit + ')');
 
                         // Show user how many repositories we're processing
-                        $('#sbi-progress-text').text('Processing ' + totalRepositories + ' repositories (limited to ' + repositoryLimit + ')...');
+                        var processingText = 'Processing ' + totalRepositories + ' repositories';
+                        if (currentFilterValue && currentFilterValue.trim()) {
+                            processingText += ' (filtered by "' + currentFilterValue + '")';
+                        }
+                        processingText += ' (limited to ' + repositoryLimit + ')...';
+                        $('#sbi-progress-text').text(processingText);
 
                         processNextRepository();
                     } else {
@@ -1317,19 +1346,6 @@ class RepositoryManager {
                 });
 
                 $('#sbi-repository-tbody').append(loadingRow);
-
-                // 🔍 Apply filter to newly added loading row
-                if (window.SBIts && window.SBIts.repositoryFSM) {
-                    window.SBIts.repositoryFSM.refreshFilter();
-                } else {
-                    // Fallback: apply any active filter
-                    var currentFilterValue = $('#sbi-repository-filter').val();
-                    if (currentFilterValue) {
-                        debugLog('🔍 Applying fallback filter to loading row: "' + currentFilterValue + '"');
-                        applyFallbackFilter(currentFilterValue);
-                    }
-                }
-
                 updateItemCount();
             }
 
@@ -1363,18 +1379,7 @@ class RepositoryManager {
                             debugLog('📦 Checksum — account: ' + (cs.account||'?') + ', total_available: ' + (cs.total_available!=null?cs.total_available:'?') + ', list_total: ' + (cs.list_total||0) + ', limit_used: ' + (cs.limit_used||0));
                         }
 
-                        // 🔍 FSM-FIRST FILTER: Apply filter after each repository is added
-                        debugLog('🔍 Repository added to DOM, applying filter');
-                        if (window.SBIts && window.SBIts.repositoryFSM) {
-                            window.SBIts.repositoryFSM.refreshFilter();
-                        } else {
-                            // Fallback: apply any active filter
-                            var currentFilterValue = $('#sbi-repository-filter').val();
-                            if (currentFilterValue) {
-                                debugLog('🔍 Applying fallback filter: "' + currentFilterValue + '"');
-                                applyFallbackFilter(currentFilterValue);
-                            }
-                        }
+                        // 🔍 FSM-FIRST FILTER: No need to apply filter here since we pre-filtered the repository list
 
                         // 🔍 FSM-FIRST FILTER: Trigger final event when last repository is loaded
                         if (isLast) {
@@ -1733,6 +1738,13 @@ class RepositoryManager {
                         // Get filter state for debugging
                         var filterState = window.SBIts.repositoryFSM.getFilterState();
                         debugLog('🔍 Filter state after setFilter:', filterState);
+
+                        // 🔄 FSM-FIRST OPTIMIZATION: If repositories are already loaded, trigger reload with new filter
+                        var currentState = window.SBIts.repositoryFSM.getCurrentState();
+                        if (currentState === 'repositories_loaded' || currentState === 'filtered') {
+                            debugLog('🔄 Repositories already loaded, triggering reload with new filter');
+                            loadRepositories(); // This will now pre-filter before processing
+                        }
                     } else {
                         debugLog('❌ FSM not available for filtering', 'error');
 
