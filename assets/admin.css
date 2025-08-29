@@ -122,6 +122,47 @@
     border-radius: 50%;
     animation: sbi-spin 1s linear infinite;
     margin-right: 8px;
+    vertical-align: middle;
+    flex-shrink: 0; /* Prevent shrinking in flex containers */
+}
+
+/* WordPress spinner fixes to prevent cropping */
+.spinner.is-active {
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 5px 0 0 !important;
+    float: none !important;
+    vertical-align: middle !important;
+    background-size: 20px 20px !important;
+    flex-shrink: 0 !important;
+}
+
+/* Ensure containers don't crop spinners */
+.sbi-loading-indicator,
+.sbi-status-scanning,
+#sbi-loading-progress,
+#sbi-initial-loading {
+    overflow: visible !important;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Table cell fixes */
+.wp-list-table td {
+    overflow: visible !important;
+    padding: 8px 10px !important;
+}
+
+.wp-list-table .sbi-loading-indicator,
+.wp-list-table .sbi-status-scanning {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 24px; /* Ensure enough height for spinner */
 }
 
 @keyframes sbi-spin {

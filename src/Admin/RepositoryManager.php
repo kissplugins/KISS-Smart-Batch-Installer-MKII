@@ -855,11 +855,47 @@ class RepositoryManager {
             transition: all 0.3s ease;
         }
 
-        /* Spinner adjustments */
+        /* Spinner adjustments - prevent cropping */
         .sbi-loading-indicator .spinner,
         .sbi-status-scanning .spinner {
             width: 16px;
             height: 16px;
+            margin: 0 5px 0 0 !important;
+            float: none !important;
+            vertical-align: middle;
+        }
+
+        /* Ensure spinner containers have enough space */
+        .sbi-loading-indicator,
+        .sbi-status-scanning,
+        #sbi-loading-progress,
+        #sbi-initial-loading {
+            overflow: visible;
+            white-space: nowrap;
+        }
+
+        /* Fix WordPress spinner base styles to prevent cropping */
+        .spinner.is-active {
+            visibility: visible;
+            opacity: 1;
+            width: 20px;
+            height: 20px;
+            margin: 0 5px 0 0;
+            float: none;
+            vertical-align: middle;
+            background-size: 20px 20px;
+        }
+
+        /* Ensure table cells don't crop spinners */
+        .wp-list-table td {
+            overflow: visible;
+        }
+
+        /* Specific fixes for loading states */
+        .sbi-loading-row td {
+            transition: all 0.3s ease;
+            overflow: visible;
+            padding: 8px 10px; /* Ensure adequate padding */
         }
 
         /* Debug panel styles */
