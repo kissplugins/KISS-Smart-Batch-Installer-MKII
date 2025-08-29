@@ -13,6 +13,7 @@ use SBI\Services\PQSIntegration;
 use SBI\Services\GitHubService;
 use SBI\Services\PluginDetectionService;
 use SBI\Services\PluginInstallationService;
+use SBI\Services\ValidationGuardService;
 use SBI\Admin\RepositoryManager;
 use SBI\API\AjaxHandler;
 use Exception;
@@ -58,6 +59,13 @@ class Plugin extends BasePlugin {
                 );
             });
 
+            // Register ValidationGuardService with StateManager dependency
+            $this->container->singleton(ValidationGuardService::class, function($container) {
+                return new ValidationGuardService(
+                    $container->get(StateManager::class)
+                );
+            });
+
             // Register admin services
             $this->container->singleton(RepositoryManager::class, function($container) {
                 return new RepositoryManager(
@@ -84,7 +92,8 @@ class Plugin extends BasePlugin {
                     $container->get(GitHubService::class),
                     $container->get(PluginDetectionService::class),
                     $container->get(PluginInstallationService::class),
-                    $container->get(StateManager::class)
+                    $container->get(StateManager::class),
+                    $container->get(ValidationGuardService::class)
                 );
             });
         } catch ( Exception $e ) {

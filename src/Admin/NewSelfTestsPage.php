@@ -76,7 +76,7 @@ class NewSelfTestsPage {
     }
 
     /**
-     * Execute all 9 test suites.
+     * Execute all 10 test suites.
      */
     private function execute_all_tests(): void {
         $start_time = microtime( true );
@@ -90,6 +90,7 @@ class NewSelfTestsPage {
             'container_di' => $this->test_container_dependency_injection(),
             'wordpress_integration' => $this->test_wordpress_integration(),
             'error_handling' => $this->test_error_handling_system(),
+            'validation_guards' => $this->test_validation_guard_system(),
             'performance_reliability' => $this->test_performance_reliability()
         ];
 
@@ -727,7 +728,181 @@ class NewSelfTestsPage {
     }
 
     /**
-     * Test Suite 9: Performance & Reliability.
+     * Test Suite 9: Validation Guard System.
+     */
+    private function test_validation_guard_system(): array {
+        $suite = [
+            'name' => 'Validation Guard System',
+            'description' => 'Tests error prevention guards and pre-validation checks',
+            'tests' => []
+        ];
+
+        // Test 9.1: ValidationGuardService Availability
+        $suite['tests'][] = $this->run_test( 'ValidationGuardService Availability', function() {
+            if ( ! class_exists( 'SBI\\Services\\ValidationGuardService' ) ) {
+                throw new \Exception( 'ValidationGuardService class not found' );
+            }
+
+            // Try to get the service from container
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            if ( ! $validation_guard ) {
+                throw new \Exception( 'ValidationGuardService not available in container' );
+            }
+
+            return 'ValidationGuardService loaded successfully';
+        });
+
+        // Test 9.2: Input Parameter Validation
+        $suite['tests'][] = $this->run_test( 'Input Parameter Validation', function() {
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            // Test valid input
+            $valid_result = $validation_guard->validate_installation_prerequisites( 'wordpress', 'wordpress' );
+            if ( ! isset( $valid_result['validations']['input'] ) ) {
+                throw new \Exception( 'Input validation not performed' );
+            }
+
+            // Test invalid input (empty values)
+            $invalid_result = $validation_guard->validate_installation_prerequisites( '', '' );
+            if ( $invalid_result['validations']['input']['success'] ) {
+                throw new \Exception( 'Invalid input was not caught' );
+            }
+
+            return 'Input parameter validation working correctly';
+        });
+
+        // Test 9.3: Permission Validation
+        $suite['tests'][] = $this->run_test( 'Permission Validation', function() {
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            $result = $validation_guard->validate_installation_prerequisites( 'test', 'repo' );
+
+            if ( ! isset( $result['validations']['permissions'] ) ) {
+                throw new \Exception( 'Permission validation not performed' );
+            }
+
+            $permission_result = $result['validations']['permissions'];
+            if ( ! isset( $permission_result['details']['capabilities'] ) ) {
+                throw new \Exception( 'Capability checks not performed' );
+            }
+
+            return 'Permission validation checks completed';
+        });
+
+        // Test 9.4: System Resource Validation
+        $suite['tests'][] = $this->run_test( 'System Resource Validation', function() {
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            $result = $validation_guard->validate_installation_prerequisites( 'test', 'repo' );
+
+            if ( ! isset( $result['validations']['resources'] ) ) {
+                throw new \Exception( 'Resource validation not performed' );
+            }
+
+            $resource_result = $result['validations']['resources'];
+            if ( ! isset( $resource_result['details']['memory_limit'] ) ) {
+                throw new \Exception( 'Memory limit check not performed' );
+            }
+
+            return 'System resource validation checks completed';
+        });
+
+        // Test 9.5: Network Connectivity Validation
+        $suite['tests'][] = $this->run_test( 'Network Connectivity Validation', function() {
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            $result = $validation_guard->validate_installation_prerequisites( 'test', 'repo' );
+
+            if ( ! isset( $result['validations']['network'] ) ) {
+                throw new \Exception( 'Network validation not performed' );
+            }
+
+            $network_result = $result['validations']['network'];
+            if ( ! isset( $network_result['details']['connectivity_tests'] ) ) {
+                throw new \Exception( 'Connectivity tests not performed' );
+            }
+
+            return 'Network connectivity validation checks completed';
+        });
+
+        // Test 9.6: WordPress Environment Validation
+        $suite['tests'][] = $this->run_test( 'WordPress Environment Validation', function() {
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            $result = $validation_guard->validate_installation_prerequisites( 'test', 'repo' );
+
+            if ( ! isset( $result['validations']['wordpress'] ) ) {
+                throw new \Exception( 'WordPress validation not performed' );
+            }
+
+            $wp_result = $result['validations']['wordpress'];
+            if ( ! isset( $wp_result['details']['wp_version'] ) ) {
+                throw new \Exception( 'WordPress version check not performed' );
+            }
+
+            return 'WordPress environment validation checks completed';
+        });
+
+        // Test 9.7: Activation Prerequisites Validation
+        $suite['tests'][] = $this->run_test( 'Activation Prerequisites Validation', function() {
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            // Test with a non-existent plugin file
+            $result = $validation_guard->validate_activation_prerequisites( 'non-existent/plugin.php', 'test/repo' );
+
+            if ( ! isset( $result['validations']['plugin_file'] ) ) {
+                throw new \Exception( 'Plugin file validation not performed' );
+            }
+
+            // Should fail for non-existent file
+            if ( $result['validations']['plugin_file']['success'] ) {
+                throw new \Exception( 'Non-existent plugin file validation should fail' );
+            }
+
+            return 'Activation prerequisites validation working correctly';
+        });
+
+        // Test 9.8: Validation Summary Generation
+        $suite['tests'][] = $this->run_test( 'Validation Summary Generation', function() {
+            $container = sbi_container();
+            $validation_guard = $container->get( \SBI\Services\ValidationGuardService::class );
+
+            $result = $validation_guard->validate_installation_prerequisites( 'test', 'repo' );
+
+            if ( ! isset( $result['summary'] ) ) {
+                throw new \Exception( 'Validation summary not generated' );
+            }
+
+            $summary = $result['summary'];
+            $required_fields = [ 'total_checks', 'passed_checks', 'failed_checks', 'success_rate' ];
+
+            foreach ( $required_fields as $field ) {
+                if ( ! isset( $summary[ $field ] ) ) {
+                    throw new \Exception( "Summary missing required field: {$field}" );
+                }
+            }
+
+            return sprintf(
+                'Validation summary generated: %d/%d checks passed (%.1f%% success rate)',
+                $summary['passed_checks'],
+                $summary['total_checks'],
+                $summary['success_rate']
+            );
+        });
+
+        return $suite;
+    }
+
+    /**
+     * Test Suite 10: Performance & Reliability.
      */
     private function test_performance_reliability(): array {
         $suite = [

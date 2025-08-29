@@ -12,6 +12,7 @@ use SBI\Services\GitHubService;
 use SBI\Services\PluginDetectionService;
 use SBI\Services\PluginInstallationService;
 use SBI\Services\StateManager;
+use SBI\Services\ValidationGuardService;
 use SBI\Enums\PluginState;
 
 /**
@@ -48,23 +49,33 @@ class AjaxHandler {
     private StateManager $state_manager;
 
     /**
+     * Validation guard service.
+     *
+     * @var ValidationGuardService
+     */
+    private ValidationGuardService $validation_guard;
+
+    /**
      * Constructor.
      *
      * @param GitHubService              $github_service       GitHub service.
      * @param PluginDetectionService     $detection_service    Plugin detection service.
      * @param PluginInstallationService  $installation_service Plugin installation service.
      * @param StateManager              $state_manager        State manager.
+     * @param ValidationGuardService     $validation_guard     Validation guard service.
      */
     public function __construct(
         GitHubService $github_service,
         PluginDetectionService $detection_service,
         PluginInstallationService $installation_service,
-        StateManager $state_manager
+        StateManager $state_manager,
+        ValidationGuardService $validation_guard
     ) {
         $this->github_service = $github_service;
         $this->detection_service = $detection_service;
         $this->installation_service = $installation_service;
         $this->state_manager = $state_manager;
+        $this->validation_guard = $validation_guard;
     }
 
     /**
@@ -494,6 +505,54 @@ class AjaxHandler {
                 'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
             ];
 
+            // Step 2: Pre-Installation Validation Guards
+            $debug_steps[] = [
+                'step' => 'Pre-Installation Validation',
+                'status' => 'starting',
+                'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+            ];
+
+            $this->send_progress_update( 'Pre-Installation Validation', 'info', 'Running comprehensive validation checks...' );
+
+            // Extract parameters for validation
+            $owner = sanitize_text_field( $_POST['owner'] ?? '' );
+            $repo = sanitize_text_field( $_POST['repository'] ?? '' );
+
+            // Run comprehensive pre-validation
+            $validation_result = $this->validation_guard->validate_installation_prerequisites( $owner, $repo );
+
+            if ( ! $validation_result['success'] ) {
+                $debug_steps[] = [
+                    'step' => 'Pre-Installation Validation',
+                    'status' => 'failed',
+                    'message' => 'Validation checks failed',
+                    'validation_summary' => $validation_result['summary'],
+                    'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+                ];
+
+                // Send detailed validation error
+                $this->send_enhanced_error(
+                    'Installation prerequisites not met',
+                    [
+                        'error_code' => 'validation_failed',
+                        'validation_results' => $validation_result,
+                        'debug_steps' => $debug_steps
+                    ]
+                );
+            }
+
+            $debug_steps[] = [
+                'step' => 'Pre-Installation Validation',
+                'status' => 'completed',
+                'message' => sprintf(
+                    'All validation checks passed (%d/%d checks successful)',
+                    $validation_result['summary']['passed_checks'],
+                    $validation_result['summary']['total_checks']
+                ),
+                'validation_summary' => $validation_result['summary'],
+                'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+            ];
+
             $this->send_progress_update( 'Security Verification', 'success', 'Security checks passed' );
 
             // Step 2: Parameter validation
@@ -737,6 +796,21 @@ class AjaxHandler {
             $this->send_enhanced_error(
                 __( 'Plugin file is required.', 'kiss-smart-batch-installer' ),
                 [ 'error_code' => 'missing_plugin_file' ]
+            );
+        }
+
+        // Pre-Activation Validation Guards
+        $validation_result = $this->validation_guard->validate_activation_prerequisites( $plugin_file, $repo_name );
+
+        if ( ! $validation_result['success'] ) {
+            $this->send_enhanced_error(
+                'Activation prerequisites not met',
+                [
+                    'error_code' => 'activation_validation_failed',
+                    'validation_results' => $validation_result,
+                    'plugin_file' => $plugin_file,
+                    'repository' => $repo_name
+                ]
             );
         }
 
