@@ -530,13 +530,50 @@ class AjaxHandler {
                     'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
                 ];
 
+                // Generate detailed validation failure message
+                $failed_validations = [];
+                $error_details = [];
+
+                foreach ( $validation_result['validations'] as $category => $result ) {
+                    if ( ! $result['success'] ) {
+                        $failed_validations[] = ucfirst( str_replace( '_', ' ', $category ) );
+
+                        // Collect specific errors for each category
+                        if ( ! empty( $result['errors'] ) ) {
+                            $error_details[ $category ] = $result['errors'];
+                        }
+                    }
+                }
+
+                $detailed_message = sprintf(
+                    'Installation prerequisites not met. Failed validations: %s',
+                    implode( ', ', $failed_validations )
+                );
+
+                // Add specific error details to debug steps
+                $debug_steps[] = [
+                    'step' => 'Validation Failure Details',
+                    'status' => 'failed',
+                    'message' => sprintf(
+                        '%d/%d validation checks failed',
+                        $validation_result['summary']['failed_checks'],
+                        $validation_result['summary']['total_checks']
+                    ),
+                    'failed_categories' => $failed_validations,
+                    'error_details' => $error_details,
+                    'recommendations' => $validation_result['recommendations'],
+                    'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+                ];
+
                 // Send detailed validation error
                 $this->send_enhanced_error(
-                    'Installation prerequisites not met',
+                    $detailed_message,
                     [
                         'error_code' => 'validation_failed',
                         'validation_results' => $validation_result,
-                        'debug_steps' => $debug_steps
+                        'debug_steps' => $debug_steps,
+                        'failed_validations' => $failed_validations,
+                        'error_details' => $error_details
                     ]
                 );
             }
@@ -803,13 +840,35 @@ class AjaxHandler {
         $validation_result = $this->validation_guard->validate_activation_prerequisites( $plugin_file, $repo_name );
 
         if ( ! $validation_result['success'] ) {
+            // Generate detailed activation failure message
+            $failed_validations = [];
+            $error_details = [];
+
+            foreach ( $validation_result['validations'] as $category => $result ) {
+                if ( ! $result['success'] ) {
+                    $failed_validations[] = ucfirst( str_replace( '_', ' ', $category ) );
+
+                    // Collect specific errors for each category
+                    if ( ! empty( $result['errors'] ) ) {
+                        $error_details[ $category ] = $result['errors'];
+                    }
+                }
+            }
+
+            $detailed_message = sprintf(
+                'Activation prerequisites not met. Failed validations: %s',
+                implode( ', ', $failed_validations )
+            );
+
             $this->send_enhanced_error(
-                'Activation prerequisites not met',
+                $detailed_message,
                 [
                     'error_code' => 'activation_validation_failed',
                     'validation_results' => $validation_result,
                     'plugin_file' => $plugin_file,
-                    'repository' => $repo_name
+                    'repository' => $repo_name,
+                    'failed_validations' => $failed_validations,
+                    'error_details' => $error_details
                 ]
             );
         }

@@ -485,6 +485,11 @@ export class RepositoryFSM {
     this.set(repo, PluginState.ERROR);
     this.debugLog(`Enhanced error set for ${repo}: ${message} (type: ${errorResponse.type}, severity: ${errorResponse.severity})`, 'error');
 
+    // Log detailed validation information if available
+    if (errorResponse.error_code === 'validation_failed' || errorResponse.error_code === 'activation_validation_failed') {
+      this.logValidationFailureDetails(repo, errorResponse);
+    }
+
     // Use backend-suggested retry delay or auto-retry logic
     if (errorContext.recoverable && (errorResponse.guidance?.auto_retry || this.shouldAutoRetry(message))) {
       const retryDelay = (errorResponse.retry_delay || this.getRetryDelay(message, 0)) * 1000; // Convert to milliseconds
@@ -495,6 +500,116 @@ export class RepositoryFSM {
 
   getErrorContext(repo: RepoId): ErrorContext | null {
     return this.errorContexts.get(repo) || null;
+  }
+
+  /**
+   * Log detailed validation failure information to debug console
+   */
+  private logValidationFailureDetails(repo: RepoId, errorResponse: any): void {
+    this.debugLog(`🔍 Validation Failure Details for ${repo}:`, 'error');
+
+    // Log failed validation categories
+    if (errorResponse.failed_validations && errorResponse.failed_validations.length > 0) {
+      this.debugLog(`❌ Failed Validations: ${errorResponse.failed_validations.join(', ')}`, 'error');
+    }
+
+    // Log specific error details for each category
+    if (errorResponse.error_details) {
+      for (const [category, errors] of Object.entries(errorResponse.error_details)) {
+        if (Array.isArray(errors) && errors.length > 0) {
+          this.debugLog(`📋 ${category.charAt(0).toUpperCase() + category.slice(1)} Errors:`, 'error');
+          (errors as string[]).forEach((error, index) => {
+            this.debugLog(`   ${index + 1}. ${error}`, 'error');
+          });
+        }
+      }
+    }
+
+    // Log validation summary if available
+    if (errorResponse.validation_results?.summary) {
+      const summary = errorResponse.validation_results.summary;
+      this.debugLog(
+        `📊 Validation Summary: ${summary.passed_checks}/${summary.total_checks} checks passed (${summary.success_rate}% success rate)`,
+        'info'
+      );
+    }
+
+    // Log recommendations if available
+    if (errorResponse.validation_results?.recommendations && errorResponse.validation_results.recommendations.length > 0) {
+      this.debugLog(`💡 Recommendations:`, 'info');
+      errorResponse.validation_results.recommendations.forEach((rec: string, index: number) => {
+        this.debugLog(`   ${index + 1}. ${rec}`, 'info');
+      });
+    }
+
+    // Log debug steps if available
+    if (errorResponse.debug_steps) {
+      this.debugLog(`🔧 Debug Steps:`, 'info');
+      errorResponse.debug_steps.forEach((step: any, index: number) => {
+        if (step.status === 'failed') {
+          this.debugLog(`   ${index + 1}. ${step.step}: ${step.message || 'Failed'}`, 'error');
+
+          // Log additional step details
+          if (step.failed_categories) {
+            this.debugLog(`      Failed Categories: ${step.failed_categories.join(', ')}`, 'error');
+          }
+          if (step.error_details) {
+            this.debugLog(`      Error Details: ${JSON.stringify(step.error_details, null, 2)}`, 'error');
+          }
+        }
+      });
+    }
+
+    // Add separator for readability
+    this.debugLog(`${'='.repeat(60)}`, 'info');
+  }
+
+  /**
+   * Extract validation details from error context for UI display
+   */
+  private getValidationDetailsFromContext(errorContext: ErrorContext): string | null {
+    // Check if this is a validation error by looking at the message or source
+    const isValidationError = errorContext.message.includes('prerequisites not met') ||
+                             errorContext.source.includes('validation');
+
+    if (!isValidationError) {
+      return null;
+    }
+
+    // Try to extract validation details from the error message
+    let details = '';
+
+    // Look for failed validation categories in the message
+    const failedValidationsMatch = errorContext.message.match(/Failed validations: ([^.]+)/);
+    if (failedValidationsMatch) {
+      const failedCategories = failedValidationsMatch[1].split(', ');
+      details += `<span style="color: #d63638;">❌ Failed: ${failedCategories.join(', ')}</span><br>`;
+    }
+
+    // Add common validation failure explanations
+    if (errorContext.message.includes('Input')) {
+      details += `<small>• Check repository name format and spelling</small><br>`;
+    }
+    if (errorContext.message.includes('Permission')) {
+      details += `<small>• Contact administrator for plugin installation permissions</small><br>`;
+    }
+    if (errorContext.message.includes('Resource')) {
+      details += `<small>• Server may need more memory or disk space</small><br>`;
+    }
+    if (errorContext.message.includes('Network')) {
+      details += `<small>• Check internet connection and GitHub accessibility</small><br>`;
+    }
+    if (errorContext.message.includes('State')) {
+      details += `<small>• Plugin may already be installed or another operation is in progress</small><br>`;
+    }
+    if (errorContext.message.includes('WordPress')) {
+      details += `<small>• WordPress environment may need updates or configuration</small><br>`;
+    }
+    if (errorContext.message.includes('Concurrency')) {
+      details += `<small>• Another operation is in progress, please wait and try again</small><br>`;
+    }
+
+    return details || null;
   }
 
   /**
@@ -684,6 +799,13 @@ export class RepositoryFSM {
 
     if (errorContext.retryCount > 0) {
       errorHtml += `<br><strong>Retries:</strong> ${errorContext.retryCount}/${this.maxRetries}`;
+    }
+
+    // Add validation failure details if available
+    const validationDetails = this.getValidationDetailsFromContext(errorContext);
+    if (validationDetails) {
+      errorHtml += `<br><br><strong>Validation Failures:</strong><br>`;
+      errorHtml += validationDetails;
     }
 
     errorHtml += `</div></details>`;
