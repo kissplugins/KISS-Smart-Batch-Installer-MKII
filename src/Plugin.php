@@ -68,12 +68,23 @@ class Plugin extends BasePlugin {
                 );
             });
 
-            // Register Self Tests page
+            // Register Self Tests page (old)
             $this->container->singleton(SelfTestsPage::class, function($container) {
                 return new SelfTestsPage(
                     $container->get(GitHubService::class),
                     $container->get(PluginDetectionService::class),
                     $container->get(StateManager::class),
+                    $container->get(AjaxHandler::class)
+                );
+            });
+
+            // Register New Self Tests page
+            $this->container->singleton(\SBI\Admin\NewSelfTestsPage::class, function($container) {
+                return new \SBI\Admin\NewSelfTestsPage(
+                    $container->get(GitHubService::class),
+                    $container->get(PluginDetectionService::class),
+                    $container->get(StateManager::class),
+                    $container->get(PluginInstallationService::class),
                     $container->get(AjaxHandler::class)
                 );
             });
@@ -122,14 +133,24 @@ class Plugin extends BasePlugin {
             [ $this, 'render_admin_page' ]
         );
 
-        // Add Self Tests submenu
+        // Add Self Tests submenu (old)
         add_submenu_page(
             'plugins.php',
-            __( 'KISS Smart Batch Installer - Self Tests', 'kiss-smart-batch-installer' ),
-            __( 'SBI Self Tests', 'kiss-smart-batch-installer' ),
+            __( 'KISS Smart Batch Installer - Self Tests (Old)', 'kiss-smart-batch-installer' ),
+            __( 'SBI Self Tests (Old)', 'kiss-smart-batch-installer' ),
             'install_plugins',
             'sbi-self-tests',
             [ $this, 'render_self_tests_page' ]
+        );
+
+        // Add New Self Tests submenu
+        add_submenu_page(
+            'plugins.php',
+            __( 'KISS Smart Batch Installer - New Self Tests', 'kiss-smart-batch-installer' ),
+            __( 'SBI New Self Tests', 'kiss-smart-batch-installer' ),
+            'install_plugins',
+            'sbi-new-self-tests',
+            [ $this, 'render_new_self_tests_page' ]
         );
     }
 
@@ -238,16 +259,62 @@ class Plugin extends BasePlugin {
     }
 
     /**
-     * Render Self Tests page.
+     * Render Self Tests page (old).
      */
     public function render_self_tests_page(): void {
+        // Ensure we're in the admin context and user has proper permissions
+        if ( ! current_user_can( 'install_plugins' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'kiss-smart-batch-installer' ) );
+        }
+
         try {
             $self_tests_page = $this->container->get( SelfTestsPage::class );
             $self_tests_page->render();
         } catch ( Exception $e ) {
-            echo '<div class="notice notice-error"><p>';
-            echo esc_html( sprintf( __( 'Failed to load Self Tests page: %s', 'kiss-smart-batch-installer' ), $e->getMessage() ) );
-            echo '</p></div>';
+            // Wrap error output in proper WordPress admin page structure
+            ?>
+            <div class="wrap">
+                <h1><?php esc_html_e( 'KISS Smart Batch Installer - Self Tests (Old)', 'kiss-smart-batch-installer' ); ?></h1>
+                <div class="notice notice-error">
+                    <p><?php echo esc_html( sprintf( __( 'Failed to load Self Tests page: %s', 'kiss-smart-batch-installer' ), $e->getMessage() ) ); ?></p>
+                </div>
+                <p>
+                    <a href="<?php echo esc_url( admin_url( 'plugins.php?page=kiss-smart-batch-installer' ) ); ?>" class="button">
+                        <?php esc_html_e( '← Back to Repository Manager', 'kiss-smart-batch-installer' ); ?>
+                    </a>
+                </p>
+            </div>
+            <?php
+        }
+    }
+
+    /**
+     * Render New Self Tests page.
+     */
+    public function render_new_self_tests_page(): void {
+        // Ensure we're in the admin context and user has proper permissions
+        if ( ! current_user_can( 'install_plugins' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'kiss-smart-batch-installer' ) );
+        }
+
+        try {
+            $new_self_tests_page = $this->container->get( \SBI\Admin\NewSelfTestsPage::class );
+            $new_self_tests_page->render();
+        } catch ( Exception $e ) {
+            // Wrap error output in proper WordPress admin page structure
+            ?>
+            <div class="wrap">
+                <h1><?php esc_html_e( 'KISS Smart Batch Installer - New Self Tests', 'kiss-smart-batch-installer' ); ?></h1>
+                <div class="notice notice-error">
+                    <p><?php echo esc_html( sprintf( __( 'Failed to load New Self Tests page: %s', 'kiss-smart-batch-installer' ), $e->getMessage() ) ); ?></p>
+                </div>
+                <p>
+                    <a href="<?php echo esc_url( admin_url( 'plugins.php?page=kiss-smart-batch-installer' ) ); ?>" class="button">
+                        <?php esc_html_e( '← Back to Repository Manager', 'kiss-smart-batch-installer' ); ?>
+                    </a>
+                </p>
+            </div>
+            <?php
         }
     }
 

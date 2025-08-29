@@ -1,58 +1,13 @@
 import { mapExceptionToError, mapResponseToError } from './errors';
-
-/**
- * Generate a UUID-like string with fallbacks for older browsers
- */
-function generateRequestId() {
-    // Modern browsers with crypto.randomUUID
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-
-    // Fallback using crypto.getRandomValues
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-        const bytes = crypto.getRandomValues(new Uint8Array(16));
-        bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
-        bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 10
-
-        const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-    }
-
-    // Final fallback for very old browsers
-    return Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9) + '-' + Math.random().toString(36).substr(2, 9);
-}
 function timeout(signal, ms) {
-    // Check for AbortController support (not available in older browsers)
-    if (typeof AbortController === 'undefined') {
-        // Log warning for debugging but don't fail
-        if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[SBI] AbortController not supported, timeout functionality disabled');
-        }
+    if (typeof AbortController === 'undefined')
         return undefined;
-    }
-
-    try {
-        const ctrl = new AbortController();
-        const id = setTimeout(() => {
-            try {
-                ctrl.abort();
-            } catch (e) {
-                // Ignore abort errors in case controller is already aborted
-            }
-        }, ms);
-
-        // When caller passes an external signal we could chain, but keep minimal
-        void signal; // not used for now
-        // Clear will be responsibility of caller lifecycle; for small calls, process ends anyway
-        return ctrl;
-    } catch (e) {
-        // AbortController constructor failed
-        if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[SBI] AbortController creation failed:', e);
-        }
-        return undefined;
-    }
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), ms);
+    // When caller passes an external signal we could chain, but keep minimal
+    void signal; // not used for now
+    // Clear will be responsibility of caller lifecycle; for small calls, process ends anyway
+    return ctrl;
 }
 function formEncode(body) {
     return Object.entries(body)
@@ -80,7 +35,7 @@ export async function wpAjaxFetch(windowObj, payload, opts = {}) {
             credentials: 'same-origin',
         });
         if (!resp.ok) {
-            const err = mapResponseToError(resp, generateRequestId(), url, method);
+            const err = mapResponseToError(resp, crypto.randomUUID?.() || Date.now().toString(), url, method);
             w.sbiDebug?.addEntry('error', 'AJAX Error', JSON.stringify(err));
             return { success: false, data: err };
         }
@@ -88,7 +43,7 @@ export async function wpAjaxFetch(windowObj, payload, opts = {}) {
         return data;
     }
     catch (e) {
-        const err = mapExceptionToError(e, generateRequestId(), url, method);
+        const err = mapExceptionToError(e, crypto.randomUUID?.() || Date.now().toString(), url, method);
         w.sbiDebug?.addEntry('error', 'AJAX Exception', JSON.stringify(err));
         return { success: false, data: err };
     }

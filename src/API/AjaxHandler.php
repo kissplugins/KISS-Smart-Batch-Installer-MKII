@@ -102,10 +102,6 @@ class AjaxHandler {
         add_action( 'wp_ajax_sbi_state_stream', [ $this, 'state_stream' ] );
 
         add_action( 'wp_ajax_sbi_test_sse', [ $this, 'test_sse' ] );
-
-        // Session management
-        add_action( 'wp_ajax_sbi_refresh_nonce', [ $this, 'refresh_nonce' ] );
-
         // UI tips
         add_action( 'wp_ajax_sbi_dismiss_webonly_tip', [ $this, 'dismiss_webonly_tip' ] );
     }
@@ -448,35 +444,6 @@ class AjaxHandler {
             'repository' => $repo_name,
             'state' => $new_state->value,
             'row_html' => $row_html,
-        ] );
-    }
-
-    /**
-     * Refresh nonce for session management.
-     */
-    public function refresh_nonce(): void {
-        // Only verify user capability, not nonce (since we're refreshing it)
-        if ( ! current_user_can( 'install_plugins' ) ) {
-            wp_send_json_error( [
-                'message' => __( 'Insufficient permissions.', 'kiss-smart-batch-installer' ),
-                'error_code' => 'insufficient_permissions'
-            ] );
-        }
-
-        // Check if user is still logged in
-        if ( ! is_user_logged_in() ) {
-            wp_send_json_error( [
-                'message' => __( 'User session expired. Please log in again.', 'kiss-smart-batch-installer' ),
-                'error_code' => 'session_expired'
-            ] );
-        }
-
-        // Generate new nonce
-        $new_nonce = wp_create_nonce( 'sbi_ajax_nonce' );
-
-        wp_send_json_success( [
-            'nonce' => $new_nonce,
-            'message' => __( 'Nonce refreshed successfully.', 'kiss-smart-batch-installer' )
         ] );
     }
 
@@ -1180,43 +1147,15 @@ class AjaxHandler {
      * Verify nonce and user capability.
      */
     private function verify_nonce_and_capability(): void {
-        $nonce_check = check_ajax_referer( 'sbi_ajax_nonce', 'nonce', false );
-
-        if ( ! $nonce_check ) {
-            // Provide more detailed error information for debugging
-            $error_data = [
-                'message' => __( 'Security check failed. Please refresh the page and try again.', 'kiss-smart-batch-installer' ),
-                'error_code' => 'nonce_verification_failed',
-                'debug_info' => [
-                    'nonce_provided' => ! empty( $_POST['nonce'] ),
-                    'user_logged_in' => is_user_logged_in(),
-                    'current_user_id' => get_current_user_id(),
-                    'session_token_valid' => wp_get_session_token() ? true : false,
-                ]
-            ];
-
-            // Log nonce failure for debugging
-            if ( WP_DEBUG_LOG ) {
-                error_log( sprintf(
-                    '[SBI] Nonce verification failed. User ID: %d, Nonce provided: %s, Session token: %s',
-                    get_current_user_id(),
-                    ! empty( $_POST['nonce'] ) ? 'yes' : 'no',
-                    wp_get_session_token() ? 'valid' : 'invalid'
-                ) );
-            }
-
-            wp_send_json_error( $error_data );
+        if ( ! check_ajax_referer( 'sbi_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error( [
+                'message' => __( 'Security check failed.', 'kiss-smart-batch-installer' )
+            ] );
         }
 
         if ( ! current_user_can( 'install_plugins' ) ) {
             wp_send_json_error( [
-                'message' => __( 'Insufficient permissions. You need the "install_plugins" capability.', 'kiss-smart-batch-installer' ),
-                'error_code' => 'insufficient_permissions',
-                'debug_info' => [
-                    'user_id' => get_current_user_id(),
-                    'user_roles' => wp_get_current_user()->roles ?? [],
-                    'required_capability' => 'install_plugins'
-                ]
+                'message' => __( 'Insufficient permissions.', 'kiss-smart-batch-installer' )
             ] );
         }
     }

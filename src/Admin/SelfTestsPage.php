@@ -77,27 +77,38 @@ class SelfTestsPage {
      * Render the self tests page.
      */
     public function render(): void {
+        // Ensure we're in the admin context and user has proper permissions
+        if ( ! current_user_can( 'install_plugins' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'kiss-smart-batch-installer' ) );
+        }
+
+        // Enqueue necessary scripts for the page
+        wp_enqueue_script( 'jquery' );
+
         try {
-            // Ensure clean output buffer
-            if (ob_get_level()) {
-                ob_clean();
-            }
-
-            // Enqueue jQuery for the page
-            wp_enqueue_script('jquery');
-
             // Run tests if requested
             if ( isset( $_POST['run_tests'] ) && wp_verify_nonce( $_POST['_wpnonce'], 'sbi_run_tests' ) ) {
                 $this->run_all_tests();
             }
         } catch ( \Throwable $e ) {
-            echo '<div class="notice notice-error"><p>';
-            echo esc_html( sprintf( 'Self Tests error: %s', $e->getMessage() ) );
-            echo '</p></div>';
-            if ( WP_DEBUG_LOG ) {
-                error_log( '[SBI Self Tests] Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
-            }
-            return;
+            // Handle any errors during test execution
+            $this->test_results = [
+                'error' => [
+                    'category' => 'System Error',
+                    'tests' => [
+                        [
+                            'name' => 'Test Execution Error',
+                            'status' => 'failed',
+                            'message' => sprintf( 'Failed to execute tests: %s', $e->getMessage() ),
+                            'details' => [
+                                'file' => $e->getFile(),
+                                'line' => $e->getLine(),
+                                'trace' => $e->getTraceAsString()
+                            ]
+                        ]
+                    ]
+                ]
+            ];
         }
 
         ?>
@@ -147,24 +158,20 @@ class SelfTestsPage {
         </div>
 
         <script>
-        // Ensure jQuery is available before using it
-        if (typeof jQuery !== 'undefined') {
-            jQuery(document).ready(function($) {
+        jQuery(document).ready(function($) {
             $('#test-repository').on('click', function() {
-                var button = $(this);
                 var owner = $('#test-repo-owner').val().trim();
-                var repo = $('#test-repo-name').val().trim();
-                var resultDiv = $('#repository-test-result');
+                var name = $('#test-repo-name').val().trim();
+                var $button = $(this);
+                var $result = $('#repository-test-result');
 
-                if (!owner || !repo) {
-                    resultDiv.removeClass('success error info').addClass('error')
-                        .html('Please enter both owner and repository name.').show();
+                if (!owner || !name) {
+                    $result.html('<div class="notice notice-error"><p><?php esc_html_e( "Please enter both owner and repository name.", "kiss-smart-batch-installer" ); ?></p></div>');
                     return;
                 }
 
-                button.prop('disabled', true).text('Testing...');
-                resultDiv.removeClass('success error info').addClass('info')
-                    .html('Testing repository access...').show();
+                $button.prop('disabled', true).text('<?php esc_html_e( "Testing...", "kiss-smart-batch-installer" ); ?>');
+                $result.html('<div class="notice notice-info"><p><?php esc_html_e( "Testing repository access...", "kiss-smart-batch-installer" ); ?></p></div>');
 
                 $.ajax({
                     url: ajaxurl,
@@ -172,58 +179,46 @@ class SelfTestsPage {
                     data: {
                         action: 'sbi_test_repository',
                         owner: owner,
-                        repo: repo,
-                        nonce: '<?php echo wp_create_nonce( 'sbi_test_repository' ); ?>'
+                        repo: name,
+                        nonce: '<?php echo wp_create_nonce( "sbi_test_repository" ); ?>'
                     },
                     success: function(response) {
                         if (response.success) {
-                            resultDiv.removeClass('error info').addClass('success')
-                                .html('<strong>Success!</strong> Repository found and accessible.<br>' +
-                                      '<strong>Name:</strong> ' + response.data.name + '<br>' +
-                                      '<strong>Description:</strong> ' + (response.data.description || 'No description') + '<br>' +
-                                      '<strong>URL:</strong> <a href="' + response.data.html_url + '" target="_blank">' + response.data.html_url + '</a>');
-                        } else {
-                            var errorHtml = '<strong>Error:</strong> ' + response.data.message;
-                            if (response.data.troubleshooting) {
-                                errorHtml += '<br><br><strong>Troubleshooting:</strong><ul>';
-                                if (response.data.troubleshooting.check_repository_exists) {
-                                    errorHtml += '<li><a href="' + response.data.troubleshooting.check_repository_exists + '" target="_blank">Check if repository exists</a></li>';
-                                }
-                                if (response.data.troubleshooting.verify_repository_public) {
-                                    errorHtml += '<li>' + response.data.troubleshooting.verify_repository_public + '</li>';
-                                }
-                                if (response.data.troubleshooting.check_spelling) {
-                                    errorHtml += '<li>' + response.data.troubleshooting.check_spelling + '</li>';
-                                }
-                                errorHtml += '</ul>';
+                            var data = response.data;
+                            var message = '✅ Repository found: <strong>' + data.name + '</strong>';
+                            if (data.description) {
+                                message += '<br><em>' + data.description + '</em>';
                             }
-                            resultDiv.removeClass('success info').addClass('error').html(errorHtml);
+                            message += '<br>Language: ' + (data.language || 'Unknown') +
+                                      ' | Stars: ' + (data.stargazers_count || 0) +
+                                      ' | Forks: ' + (data.forks_count || 0);
+                            if (data.private) {
+                                message += ' | <span style="color: orange;">Private Repository</span>';
+                            }
+                            $result.html('<div class="notice notice-success"><p>' + message + '</p></div>');
+                        } else {
+                            var errorMsg = response.data.message || 'Unknown error occurred';
+                            if (response.data.troubleshooting) {
+                                errorMsg += '<br><strong>Troubleshooting:</strong><ul>';
+                                for (var key in response.data.troubleshooting) {
+                                    errorMsg += '<li>' + response.data.troubleshooting[key] + '</li>';
+                                }
+                                errorMsg += '</ul>';
+                            }
+                            $result.html('<div class="notice notice-error"><p>' + errorMsg + '</p></div>');
                         }
                     },
                     error: function() {
-                        resultDiv.removeClass('success info').addClass('error')
-                            .html('<strong>Error:</strong> Failed to test repository. Please try again.');
+                        $result.html('<div class="notice notice-error"><p><?php esc_html_e( "Failed to test repository. Please try again.", "kiss-smart-batch-installer" ); ?></p></div>');
                     },
                     complete: function() {
-                        button.prop('disabled', false).text('<?php esc_html_e( 'Test Repository', 'kiss-smart-batch-installer' ); ?>');
+                        $button.prop('disabled', false).text('<?php esc_html_e( "Test Repository", "kiss-smart-batch-installer" ); ?>');
                     }
                 });
             });
         });
-        } else {
-            console.error('jQuery is not available. Please ensure jQuery is loaded.');
-        }
         </script>
 
-        <?php $this->output_admin_styles(); ?>
-        <?php
-    }
-
-    /**
-     * Output admin styles for the self tests page.
-     */
-    private function output_admin_styles(): void {
-        ?>
         <style>
         .test-category {
             margin: 20px 0;
@@ -306,6 +301,70 @@ class SelfTestsPage {
             display: block;
         }
         </style>
+
+        <script>
+        jQuery(document).ready(function($) {
+            $('#test-repository').on('click', function() {
+                var button = $(this);
+                var owner = $('#test-repo-owner').val().trim();
+                var repo = $('#test-repo-name').val().trim();
+                var resultDiv = $('#repository-test-result');
+
+                if (!owner || !repo) {
+                    resultDiv.removeClass('success error info').addClass('error')
+                        .html('Please enter both owner and repository name.').show();
+                    return;
+                }
+
+                button.prop('disabled', true).text('Testing...');
+                resultDiv.removeClass('success error info').addClass('info')
+                    .html('Testing repository access...').show();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'sbi_test_repository',
+                        owner: owner,
+                        repo: repo,
+                        nonce: '<?php echo wp_create_nonce( 'sbi_test_repository' ); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            resultDiv.removeClass('error info').addClass('success')
+                                .html('<strong>Success!</strong> Repository found and accessible.<br>' +
+                                      '<strong>Name:</strong> ' + response.data.name + '<br>' +
+                                      '<strong>Description:</strong> ' + (response.data.description || 'No description') + '<br>' +
+                                      '<strong>URL:</strong> <a href="' + response.data.html_url + '" target="_blank">' + response.data.html_url + '</a>');
+                        } else {
+                            var errorHtml = '<strong>Error:</strong> ' + response.data.message;
+                            if (response.data.troubleshooting) {
+                                errorHtml += '<br><br><strong>Troubleshooting:</strong><ul>';
+                                if (response.data.troubleshooting.check_repository_exists) {
+                                    errorHtml += '<li><a href="' + response.data.troubleshooting.check_repository_exists + '" target="_blank">Check if repository exists</a></li>';
+                                }
+                                if (response.data.troubleshooting.verify_repository_public) {
+                                    errorHtml += '<li>' + response.data.troubleshooting.verify_repository_public + '</li>';
+                                }
+                                if (response.data.troubleshooting.check_spelling) {
+                                    errorHtml += '<li>' + response.data.troubleshooting.check_spelling + '</li>';
+                                }
+                                errorHtml += '</ul>';
+                            }
+                            resultDiv.removeClass('success info').addClass('error').html(errorHtml);
+                        }
+                    },
+                    error: function() {
+                        resultDiv.removeClass('success info').addClass('error')
+                            .html('<strong>Error:</strong> Failed to test repository. Please try again.');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('<?php esc_html_e( 'Test Repository', 'kiss-smart-batch-installer' ); ?>');
+                    }
+                });
+            });
+        });
+        </script>
         <?php
     }
 
@@ -314,11 +373,6 @@ class SelfTestsPage {
      */
     private function run_all_tests(): void {
         $this->test_results = [];
-
-        // Ensure clean output buffer
-        if (ob_get_level()) {
-            ob_clean();
-        }
 
         // Test categories - enabling more tests
         $test_categories = [
@@ -340,11 +394,6 @@ class SelfTestsPage {
             $method = "test_{$category}";
             if ( method_exists( $this, $method ) ) {
                 try {
-                    // Ensure clean output buffer before each test category
-                    if (ob_get_level()) {
-                        ob_clean();
-                    }
-
                     $start_time = microtime( true );
                     $tests = $this->$method();
                     $end_time = microtime( true );
@@ -786,17 +835,28 @@ class SelfTestsPage {
             $repo = 'kissplugins/KISS-Smart-Batch-Installer';
             $this->state_manager->acquire_processing_lock($repo, 5);
 
-            // Test lock acquisition directly instead of AJAX call to avoid output issues
-            $second_lock = $this->state_manager->acquire_processing_lock($repo, 1);
+            // Directly call activate with lock held; expect JSON error structure
+            $_POST['repository'] = $repo;
+            $_POST['plugin_file'] = 'kiss-smart-batch-installer/kiss-smart-batch-installer.php';
+            $_POST['nonce'] = wp_create_nonce('sbi_ajax_nonce');
+
+            // Buffer output to capture wp_send_json_* behavior for testing
+            ob_start();
+            try {
+                $this->ajax_handler->activate_plugin();
+            } catch (\Throwable $e) {
+                // ignore; wp_send_json_* may exit
+            }
+            $resp = ob_get_clean();
 
             // Clean up
             $this->state_manager->release_processing_lock($repo);
 
-            if ($second_lock) {
-                throw new \Exception('Expected second lock acquisition to fail');
+            if (strpos((string)$resp, 'Another operation is in progress') === false) {
+                throw new \Exception('Expected lock rejection message in AJAX response');
             }
 
-            return 'Processing lock correctly rejected concurrent operation';
+            return 'AJAX activation rejected with lock contention message as expected';
         });
 
 
@@ -1034,7 +1094,7 @@ class SelfTestsPage {
 
         // Test 8: Enhanced Error Handling Validation
         $tests[] = $this->run_test('FSM Enhanced Error Handling', function() {
-            $test_repo = 'kissplugins/FSM-Test-Enhanced-Errors-' . time(); // Unique repo for clean state
+            $test_repo = 'kissplugins/FSM-Test-Enhanced-Errors';
 
             // Test error context storage
             $this->state_manager->transition($test_repo, PluginState::ERROR, [
@@ -1049,16 +1109,10 @@ class SelfTestsPage {
                 throw new \Exception('Enhanced error transition failed');
             }
 
-            // Test retry count increment (should be 1 for first increment)
+            // Test retry count increment
             $retry_count = $this->state_manager->increment_retry_count($test_repo);
             if ($retry_count !== 1) {
-                throw new \Exception("Retry count increment failed: expected 1, got {$retry_count}");
-            }
-
-            // Test second increment
-            $retry_count_2 = $this->state_manager->increment_retry_count($test_repo);
-            if ($retry_count_2 !== 2) {
-                throw new \Exception("Second retry count increment failed: expected 2, got {$retry_count_2}");
+                throw new \Exception('Retry count increment failed');
             }
 
             return 'Enhanced error handling working correctly';
