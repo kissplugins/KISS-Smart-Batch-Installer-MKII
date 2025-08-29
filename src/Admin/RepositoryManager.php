@@ -973,6 +973,15 @@ class RepositoryManager {
             var currentIndex = 0;
             var totalRepositories = 0;
             var repositoryLimit = 0;
+            var progressiveLoadingActive = false; // 🛑 DOUBLE STOP: Track if progressive loading is active
+            var shouldStopLoading = false; // 🛑 DOUBLE STOP: Flag to halt progressive loading
+
+            // 🛑 DOUBLE STOP: Function to reset the double stop mechanism
+            function resetDoubleStop() {
+                shouldStopLoading = false;
+                progressiveLoadingActive = false;
+                debugLog('🛑 DOUBLE STOP: Reset mechanism', 'info');
+            }
 
             // Initialize FSM for state management
             var fsm = null;
@@ -1130,6 +1139,7 @@ class RepositoryManager {
                     return;
                 }
                 setSystemLoading(true);
+                resetDoubleStop(); // 🛑 DOUBLE STOP: Reset mechanism for new loading cycle
 
                 debugLog('🚀 Starting progressive loading for organization: ' + org);
                 $('#sbi-initial-loading').show();
@@ -1201,6 +1211,8 @@ class RepositoryManager {
 
                         // Start processing repositories one by one (truly sequential)
                         currentIndex = 0;
+                        progressiveLoadingActive = true; // 🛑 DOUBLE STOP: Mark progressive loading as active
+                        shouldStopLoading = false; // 🛑 DOUBLE STOP: Reset stop flag
                         debugLog('🔄 Starting progressive loading of ' + totalRepositories + ' repositories (limited to ' + repositoryLimit + ')');
 
                         // Show user how many repositories we're processing
@@ -1224,6 +1236,15 @@ class RepositoryManager {
             }
 
             function processNextRepository() {
+                // 🛑 DOUBLE STOP: Check if we should halt progressive loading
+                if (shouldStopLoading) {
+                    debugLog('🛑 DOUBLE STOP: Progressive loading halted by filter', 'warning');
+                    progressiveLoadingActive = false;
+                    setSystemLoading(false);
+                    $('#sbi-loading-progress').hide();
+                    return;
+                }
+
                 // Prevent multiple simultaneous processing using FSM state
                 if (isSystemLoading()) {
                     debugLog('⏸️ Skipping processNextRepository - system already processing', 'warning');
@@ -1236,6 +1257,7 @@ class RepositoryManager {
                     $('#sbi-loading-progress').hide();
                     updateItemCount();
                     setSystemLoading(false);
+                    progressiveLoadingActive = false; // 🛑 DOUBLE STOP: Mark as inactive
                     return;
                 }
 
@@ -1268,6 +1290,15 @@ class RepositoryManager {
                     setRepositoryProcessing(repo.full_name, false);
 
                     var advanceAfter = function(delayMs) {
+                        // 🛑 DOUBLE STOP: Check if we should halt before advancing
+                        if (shouldStopLoading) {
+                            debugLog('🛑 DOUBLE STOP: Halting before advancing to next repository', 'warning');
+                            progressiveLoadingActive = false;
+                            setSystemLoading(false);
+                            $('#sbi-loading-progress').hide();
+                            return;
+                        }
+
                         // Move to the next repository only after optional render completes
                         debugLog('🏁 Finished processing repository: ' + repo.full_name);
                         currentIndex++;
@@ -1730,6 +1761,12 @@ class RepositoryManager {
                 // Debounce filter application (300ms delay)
                 filterTimeout = setTimeout(function() {
                     debugLog('🔍 Applying filter: "' + searchTerm + '"');
+
+                    // 🛑 DOUBLE STOP: If progressive loading is active, halt it immediately
+                    if (progressiveLoadingActive) {
+                        debugLog('🛑 DOUBLE STOP: Filter applied during progressive loading - halting background loading', 'warning');
+                        shouldStopLoading = true;
+                    }
 
                     if (window.SBIts && window.SBIts.repositoryFSM) {
                         debugLog('🔍 FSM available, calling setFilter()');
