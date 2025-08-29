@@ -16,7 +16,7 @@ Internal WordPress/PHP developers at Neochrome, Hypercart, and Kiss.
 ---
 
 ## 2. Guiding Principles
-
+- **FSM-Centric:**  Finite State Machine (FSM) is the core architectural pattern for managing all states and core business logic.
 - **Developer-Centric:** The framework must be easy to use, well-documented, and reduce boilerplate code.
 - **OOP & Modern PHP:** All code must follow modern Object-Oriented principles and PSR-4 standards.
 - **WordPress-First:** Leverage existing WordPress APIs and functions before creating custom solutions.

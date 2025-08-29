@@ -125,8 +125,8 @@ class Plugin extends BasePlugin {
         // Add Self Tests submenu
         add_submenu_page(
             'plugins.php',
-            __( 'KISS Smart Batch Installer - Self Tests', 'kiss-smart-batch-installer' ),
-            __( 'SBI Self Tests', 'kiss-smart-batch-installer' ),
+            sprintf( 'NHK/KISS v[%s] SBI Self Tests', defined( 'GBI_VERSION' ) ? GBI_VERSION : '1.0.0' ),
+            sprintf( 'SBI Self Tests v[%s]', defined( 'GBI_VERSION' ) ? GBI_VERSION : '1.0.0' ),
             'install_plugins',
             'sbi-self-tests',
             [ $this, 'render_self_tests_page' ]

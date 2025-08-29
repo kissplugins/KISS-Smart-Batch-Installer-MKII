@@ -690,7 +690,7 @@ class NewSelfTestsPage {
     private function render_page_html(): void {
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e( 'SBI Self Tests - New Comprehensive Suite', 'kiss-smart-batch-installer' ); ?></h1>
+            <h1><?php echo esc_html( sprintf( 'NHK/KISS v[%s] SBI Self Tests - Comprehensive Suite', defined( 'GBI_VERSION' ) ? GBI_VERSION : '1.0.0' ) ); ?></h1>
             
             <p>
                 <a href="<?php echo esc_url( admin_url( 'plugins.php?page=kiss-smart-batch-installer' ) ); ?>" class="button">
