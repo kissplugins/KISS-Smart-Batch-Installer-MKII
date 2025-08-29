@@ -174,10 +174,94 @@ export class RepositoryFSM {
 
   // Enhanced Error Handling Methods
 
+  /**
+   * Convert raw error messages to user-friendly, actionable messages with recovery suggestions
+   */
+  private getActionableErrorMessage(errorMessage: string, source: string, repo: RepoId): string {
+    const lowerMessage = errorMessage.toLowerCase();
+
+    // GitHub API Rate Limit
+    if (lowerMessage.includes('rate limit') || lowerMessage.includes('403')) {
+      return `<strong>GitHub API Rate Limit</strong><br>
+              <small>Please wait 5-10 minutes before trying again. GitHub limits API requests to prevent abuse.<br>
+              <a href="#" onclick="setTimeout(() => location.reload(), 300000); return false;" style="color: #0073aa;">Auto-refresh in 5 minutes</a></small>`;
+    }
+
+    // Repository Not Found
+    if (lowerMessage.includes('404') || lowerMessage.includes('not found')) {
+      return `<strong>Repository Not Found</strong><br>
+              <small>The repository may be private, renamed, or deleted.<br>
+              <a href="https://github.com/${repo}" target="_blank" style="color: #0073aa;">View on GitHub</a> to verify it exists.</small>`;
+    }
+
+    // Network/Connection Errors
+    if (lowerMessage.includes('network') || lowerMessage.includes('timeout') || lowerMessage.includes('connection')) {
+      return `<strong>Network Error</strong><br>
+              <small>Check your internet connection and try again. This is usually temporary.<br>
+              <em>Auto-retry will attempt in a few seconds...</em></small>`;
+    }
+
+    // Permission Errors
+    if (source === 'install' && (lowerMessage.includes('permission') || lowerMessage.includes('unauthorized'))) {
+      return `<strong>Permission Error</strong><br>
+              <small>You may not have permission to install plugins. Contact your WordPress administrator.<br>
+              Required capability: <code>install_plugins</code></small>`;
+    }
+
+    // Activation/Deactivation Errors
+    if (source === 'activate' && lowerMessage.includes('activation')) {
+      return `<strong>Plugin Activation Failed</strong><br>
+              <small>The plugin may have compatibility issues or missing dependencies.<br>
+              Check the WordPress error log for more details.</small>`;
+    }
+
+    if (source === 'deactivate' && lowerMessage.includes('deactivation')) {
+      return `<strong>Plugin Deactivation Failed</strong><br>
+              <small>The plugin may be required by other plugins or themes.<br>
+              Try deactivating dependent plugins first.</small>`;
+    }
+
+    // Download/Package Errors
+    if (lowerMessage.includes('download') || lowerMessage.includes('package') || lowerMessage.includes('zip')) {
+      return `<strong>Download Error</strong><br>
+              <small>Failed to download or extract the plugin package.<br>
+              The repository may not contain a valid WordPress plugin.</small>`;
+    }
+
+    // GitHub API Errors (general)
+    if (source === 'github_api' || lowerMessage.includes('github')) {
+      return `<strong>GitHub API Error</strong><br>
+              <small>Unable to communicate with GitHub. This may be temporary.<br>
+              <a href="https://www.githubstatus.com/" target="_blank" style="color: #0073aa;">Check GitHub Status</a></small>`;
+    }
+
+    // WordPress Core Errors
+    if (lowerMessage.includes('wordpress') || lowerMessage.includes('wp-admin')) {
+      return `<strong>WordPress Error</strong><br>
+              <small>A WordPress core error occurred. Check your site's error logs.<br>
+              Ensure WordPress is up to date and functioning properly.</small>`;
+    }
+
+    // Memory/Resource Errors
+    if (lowerMessage.includes('memory') || lowerMessage.includes('fatal error')) {
+      return `<strong>Server Resource Error</strong><br>
+              <small>Insufficient server memory or resources.<br>
+              Contact your hosting provider to increase PHP memory limit.</small>`;
+    }
+
+    // Fallback: Generic error with helpful context
+    return `<strong>Error:</strong> ${errorMessage}<br>
+            <small>Source: ${source} • Try refreshing the repository status or contact support if the issue persists.<br>
+            <em>Use the Retry button below if available.</em></small>`;
+  }
+
   setError(repo: RepoId, message: string, source: string, recoverable: boolean = true): void {
+    // Enhanced: Convert raw error message to actionable user-friendly message
+    const actionableMessage = this.getActionableErrorMessage(message, source, repo);
+
     const errorContext: ErrorContext = {
       timestamp: Date.now(),
-      message,
+      message: actionableMessage,
       source,
       retryCount: 0,
       recoverable,
@@ -186,10 +270,50 @@ export class RepositoryFSM {
     this.errorContexts.set(repo, errorContext);
     this.set(repo, PluginState.ERROR);
     this.debugLog(`Error set for ${repo}: ${message} (source: ${source}, recoverable: ${recoverable})`, 'error');
+
+    // Enhanced: Auto-retry for certain types of errors
+    if (this.shouldAutoRetry(message) && recoverable) {
+      const retryDelay = this.getRetryDelay(message, 0);
+      this.debugLog(`Auto-retry scheduled for ${repo} in ${retryDelay}ms`);
+      setTimeout(() => this.retryRepository(repo), retryDelay);
+    }
   }
 
   getErrorContext(repo: RepoId): ErrorContext | null {
     return this.errorContexts.get(repo) || null;
+  }
+
+  /**
+   * Determine if an error should trigger automatic retry
+   */
+  private shouldAutoRetry(message: string): boolean {
+    const lowerMessage = message.toLowerCase();
+    return lowerMessage.includes('network') ||
+           lowerMessage.includes('timeout') ||
+           lowerMessage.includes('connection') ||
+           lowerMessage.includes('temporary') ||
+           lowerMessage.includes('503') || // Service unavailable
+           lowerMessage.includes('502'); // Bad gateway
+  }
+
+  /**
+   * Get appropriate retry delay based on error type and retry count
+   */
+  private getRetryDelay(message: string, retryCount: number): number {
+    const lowerMessage = message.toLowerCase();
+
+    // Rate limit errors need longer delays
+    if (lowerMessage.includes('rate limit') || lowerMessage.includes('403')) {
+      return 60000; // 1 minute for rate limits
+    }
+
+    // Network errors use exponential backoff
+    if (lowerMessage.includes('network') || lowerMessage.includes('timeout')) {
+      return Math.min(5000 * Math.pow(2, retryCount), 30000); // Max 30 seconds
+    }
+
+    // Default retry delay
+    return 2000; // 2 seconds
   }
 
   canRetry(repo: RepoId): boolean {
@@ -206,7 +330,7 @@ export class RepositoryFSM {
       return false;
     }
 
-    // Update retry context
+    // Update retry context with enhanced delay calculation
     errorContext.retryCount++;
     errorContext.lastRetryAt = Date.now();
     this.errorContexts.set(repo, errorContext);
@@ -288,22 +412,40 @@ export class RepositoryFSM {
       }
     }
 
-    // Build error message with context
+    // Enhanced error display with actionable messages
     const timeAgo = this.formatTimeAgo(errorContext.timestamp);
-    let errorHtml = `<strong>Error:</strong> ${errorContext.message}<br>`;
-    errorHtml += `<small>Source: ${errorContext.source} • ${timeAgo}</small>`;
+
+    // The message already contains enhanced HTML formatting from getActionableErrorMessage
+    let errorHtml = errorContext.message;
+
+    // Add technical details in a collapsible section for debugging
+    errorHtml += `<br><details style="margin-top: 8px;">
+                    <summary style="cursor: pointer; font-size: 11px; color: #666;">Technical Details</summary>
+                    <div style="margin-top: 4px; font-size: 11px; color: #666;">
+                      <strong>Source:</strong> ${errorContext.source}<br>
+                      <strong>Time:</strong> ${timeAgo}`;
 
     if (errorContext.retryCount > 0) {
-      errorHtml += `<br><small>Retries: ${errorContext.retryCount}/${this.maxRetries}</small>`;
+      errorHtml += `<br><strong>Retries:</strong> ${errorContext.retryCount}/${this.maxRetries}`;
     }
 
-    // Add retry button if recoverable
+    errorHtml += `</div></details>`;
+
+    // Enhanced retry button with better styling and context
     if (errorContext.recoverable && this.canRetry(repo)) {
-      errorHtml += `<br><button class="button button-small sbi-retry-btn" data-repo="${repo}" style="margin-top: 4px;">Retry</button>`;
+      const retryText = errorContext.retryCount > 0 ? `Retry (${this.maxRetries - errorContext.retryCount} left)` : 'Retry';
+      errorHtml += `<br><button class="button button-small sbi-retry-btn" data-repo="${repo}"
+                      style="margin-top: 8px; background: #0073aa; color: white; border-color: #0073aa;">
+                      <span class="dashicons dashicons-update" style="font-size: 12px; margin-right: 4px;"></span>${retryText}
+                    </button>`;
     } else if (!errorContext.recoverable) {
-      errorHtml += `<br><small style="color: #d63638;">Non-recoverable error</small>`;
+      errorHtml += `<br><div style="margin-top: 8px; padding: 4px 8px; background: #fcf2f2; border-left: 3px solid #d63638; font-size: 12px;">
+                      <strong>Non-recoverable error</strong> - Manual intervention required
+                    </div>`;
     } else {
-      errorHtml += `<br><small style="color: #d63638;">Max retries reached</small>`;
+      errorHtml += `<br><div style="margin-top: 8px; padding: 4px 8px; background: #fcf8e3; border-left: 3px solid #dba617; font-size: 12px;">
+                      <strong>Max retries reached</strong> - Try refreshing the page or contact support
+                    </div>`;
     }
 
     errorContainer.innerHTML = errorHtml;
