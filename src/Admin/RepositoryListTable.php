@@ -418,25 +418,123 @@ class RepositoryListTable extends WP_List_Table {
                         // Query FSM for installed plugin file (fallback included)
                         $plugin_file = $this->state_manager->getInstalledPluginFile( $repo_full_name );
                     }
-                    $actions[] = sprintf(
-                        '<button type="button" class="button button-secondary sbi-deactivate-plugin" data-repo="%s" data-owner="%s" data-plugin-file="%s">%s</button>',
-                        esc_attr( $repo_name ),
-                        esc_attr( $owner ),
-                        esc_attr( $plugin_file ),
-                        esc_html__( 'Deactivate', 'kiss-smart-batch-installer' )
-                    );
+
+                    // Add Settings button if plugin has settings page
+                    $settings_url = $this->get_plugin_settings_url( $plugin_file );
+                    if ( $settings_url ) {
+                        $actions[] = sprintf(
+                            '<a href="%s" class="button button-primary" title="%s"><span class="dashicons dashicons-admin-settings" style="font-size: 13px; line-height: 1.2; margin-right: 5px;"></span>%s</a>',
+                            esc_url( $settings_url ),
+                            esc_attr__( 'Plugin Settings', 'kiss-smart-batch-installer' ),
+                            esc_html__( 'Settings', 'kiss-smart-batch-installer' )
+                        );
+                    }
+
+                    // FSM-centric self-protection check
+                    if ( $this->state_manager->is_self_protected( $repo_full_name ) ) {
+                        // Disable deactivate button for self-protection with helpful tooltip
+                        $actions[] = sprintf(
+                            '<button type="button" class="button button-secondary" disabled title="%s" style="opacity: 0.5; cursor: not-allowed;"><span class="dashicons dashicons-shield" style="font-size: 13px; line-height: 1.2; margin-right: 5px;"></span>%s</button>',
+                            esc_attr__( 'Cannot deactivate: This would remove access to the Smart Batch Installer interface', 'kiss-smart-batch-installer' ),
+                            esc_html__( 'Protected', 'kiss-smart-batch-installer' )
+                        );
+                    } else {
+                        $actions[] = sprintf(
+                            '<button type="button" class="button button-secondary sbi-deactivate-plugin" data-repo="%s" data-owner="%s" data-plugin-file="%s">%s</button>',
+                            esc_attr( $repo_name ),
+                            esc_attr( $owner ),
+                            esc_attr( $plugin_file ),
+                            esc_html__( 'Deactivate', 'kiss-smart-batch-installer' )
+                        );
+                    }
                     break;
             }
         }
 
         // Always add refresh action
         $actions[] = sprintf(
-            '<button type="button" class="button button-small sbi-refresh-status" data-repo="%s">%s</button>',
+            '<button type="button" class="button sbi-refresh-status" data-repo="%s" title="%s"><span class="dashicons dashicons-update" style="font-size: 13px; line-height: 1.2; margin-right: 5px;"></span>%s</button>',
             esc_attr( $item['full_name'] ?? '' ),
+            esc_attr__( 'Refresh plugin status', 'kiss-smart-batch-installer' ),
             esc_html__( 'Refresh', 'kiss-smart-batch-installer' )
         );
 
         return implode( ' ', $actions );
+    }
+
+
+
+    /**
+     * Get plugin settings URL if the plugin has a settings page.
+     *
+     * @param string $plugin_file Plugin file path.
+     * @return string|null Settings URL or null if no settings page.
+     */
+    private function get_plugin_settings_url( string $plugin_file ): ?string {
+        if ( empty( $plugin_file ) || ! is_plugin_active( $plugin_file ) ) {
+            return null;
+        }
+
+        // Get plugin data to check for settings
+        $plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . $plugin_file );
+
+        if ( empty( $plugin_data ) ) {
+            return null;
+        }
+
+        // Common settings page patterns to check
+        $plugin_slug = dirname( $plugin_file );
+        $plugin_basename = plugin_basename( $plugin_file );
+
+        // Check common admin page patterns
+        $possible_pages = [
+            // Standard WordPress patterns
+            'admin.php?page=' . $plugin_slug,
+            'admin.php?page=' . $plugin_slug . '-settings',
+            'admin.php?page=' . $plugin_slug . '_settings',
+            'options-general.php?page=' . $plugin_slug,
+            'options-general.php?page=' . $plugin_slug . '-settings',
+            'options-general.php?page=' . $plugin_slug . '_settings',
+            // Tools page
+            'tools.php?page=' . $plugin_slug,
+            // Theme/appearance page
+            'themes.php?page=' . $plugin_slug,
+            // Plugin-specific pages
+            'plugins.php?page=' . $plugin_slug,
+        ];
+
+        // Check if any of these pages exist by looking at registered admin pages
+        global $submenu, $admin_page_hooks;
+
+        foreach ( $possible_pages as $page ) {
+            $page_parts = parse_url( $page );
+            $page_file = $page_parts['path'] ?? '';
+            parse_str( $page_parts['query'] ?? '', $query_vars );
+            $page_slug = $query_vars['page'] ?? '';
+
+            if ( empty( $page_slug ) ) {
+                continue;
+            }
+
+            // Check if page is registered in WordPress admin
+            if ( isset( $admin_page_hooks[ $page_slug ] ) ) {
+                return admin_url( $page );
+            }
+
+            // Check submenu pages
+            $parent_pages = [ 'options-general.php', 'admin.php', 'tools.php', 'themes.php', 'plugins.php' ];
+            foreach ( $parent_pages as $parent ) {
+                if ( isset( $submenu[ $parent ] ) ) {
+                    foreach ( $submenu[ $parent ] as $item ) {
+                        if ( isset( $item[2] ) && $item[2] === $page_slug ) {
+                            return admin_url( $page );
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

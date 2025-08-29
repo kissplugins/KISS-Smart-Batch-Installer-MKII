@@ -13,8 +13,8 @@ use SBI\Services\PQSIntegration;
 use SBI\Services\GitHubService;
 use SBI\Services\PluginDetectionService;
 use SBI\Services\PluginInstallationService;
+use SBI\Services\ValidationGuardService;
 use SBI\Admin\RepositoryManager;
-use SBI\Admin\SelfTestsPage;
 use SBI\API\AjaxHandler;
 use Exception;
 
@@ -59,6 +59,13 @@ class Plugin extends BasePlugin {
                 );
             });
 
+            // Register ValidationGuardService with StateManager dependency
+            $this->container->singleton(ValidationGuardService::class, function($container) {
+                return new ValidationGuardService(
+                    $container->get(StateManager::class)
+                );
+            });
+
             // Register admin services
             $this->container->singleton(RepositoryManager::class, function($container) {
                 return new RepositoryManager(
@@ -69,11 +76,12 @@ class Plugin extends BasePlugin {
             });
 
             // Register Self Tests page
-            $this->container->singleton(SelfTestsPage::class, function($container) {
-                return new SelfTestsPage(
+            $this->container->singleton(\SBI\Admin\NewSelfTestsPage::class, function($container) {
+                return new \SBI\Admin\NewSelfTestsPage(
                     $container->get(GitHubService::class),
                     $container->get(PluginDetectionService::class),
                     $container->get(StateManager::class),
+                    $container->get(PluginInstallationService::class),
                     $container->get(AjaxHandler::class)
                 );
             });
@@ -84,7 +92,8 @@ class Plugin extends BasePlugin {
                     $container->get(GitHubService::class),
                     $container->get(PluginDetectionService::class),
                     $container->get(PluginInstallationService::class),
-                    $container->get(StateManager::class)
+                    $container->get(StateManager::class),
+                    $container->get(ValidationGuardService::class)
                 );
             });
         } catch ( Exception $e ) {
@@ -125,8 +134,8 @@ class Plugin extends BasePlugin {
         // Add Self Tests submenu
         add_submenu_page(
             'plugins.php',
-            __( 'KISS Smart Batch Installer - Self Tests', 'kiss-smart-batch-installer' ),
-            __( 'SBI Self Tests', 'kiss-smart-batch-installer' ),
+            sprintf( 'NHK/KISS v[%s] SBI Self Tests', defined( 'GBI_VERSION' ) ? GBI_VERSION : '1.0.0' ),
+            sprintf( 'SBI Self Tests v[%s]', defined( 'GBI_VERSION' ) ? GBI_VERSION : '1.0.0' ),
             'install_plugins',
             'sbi-self-tests',
             [ $this, 'render_self_tests_page' ]
@@ -241,13 +250,29 @@ class Plugin extends BasePlugin {
      * Render Self Tests page.
      */
     public function render_self_tests_page(): void {
+        // Ensure we're in the admin context and user has proper permissions
+        if ( ! current_user_can( 'install_plugins' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'kiss-smart-batch-installer' ) );
+        }
+
         try {
-            $self_tests_page = $this->container->get( SelfTestsPage::class );
+            $self_tests_page = $this->container->get( \SBI\Admin\NewSelfTestsPage::class );
             $self_tests_page->render();
         } catch ( Exception $e ) {
-            echo '<div class="notice notice-error"><p>';
-            echo esc_html( sprintf( __( 'Failed to load Self Tests page: %s', 'kiss-smart-batch-installer' ), $e->getMessage() ) );
-            echo '</p></div>';
+            // Wrap error output in proper WordPress admin page structure
+            ?>
+            <div class="wrap">
+                <h1><?php esc_html_e( 'KISS Smart Batch Installer - Self Tests', 'kiss-smart-batch-installer' ); ?></h1>
+                <div class="notice notice-error">
+                    <p><?php echo esc_html( sprintf( __( 'Failed to load Self Tests page: %s', 'kiss-smart-batch-installer' ), $e->getMessage() ) ); ?></p>
+                </div>
+                <p>
+                    <a href="<?php echo esc_url( admin_url( 'plugins.php?page=kiss-smart-batch-installer' ) ); ?>" class="button">
+                        <?php esc_html_e( '← Back to Repository Manager', 'kiss-smart-batch-installer' ); ?>
+                    </a>
+                </p>
+            </div>
+            <?php
         }
     }
 

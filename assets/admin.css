@@ -122,6 +122,251 @@
     border-radius: 50%;
     animation: sbi-spin 1s linear infinite;
     margin-right: 8px;
+    vertical-align: middle;
+    flex-shrink: 0; /* Prevent shrinking in flex containers */
+}
+
+/* WordPress spinner fixes to prevent cropping */
+.spinner.is-active {
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 5px 0 0 !important;
+    float: none !important;
+    vertical-align: middle !important;
+    background-size: 20px 20px !important;
+    flex-shrink: 0 !important;
+}
+
+/* Ensure containers don't crop spinners */
+.sbi-loading-indicator,
+.sbi-status-scanning,
+#sbi-loading-progress,
+#sbi-initial-loading {
+    overflow: visible !important;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Table cell fixes */
+.wp-list-table td {
+    overflow: visible !important;
+    padding: 8px 10px !important;
+}
+
+.wp-list-table .sbi-loading-indicator,
+.wp-list-table .sbi-status-scanning {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 24px; /* Ensure enough height for spinner */
+}
+
+/* Button styling for consistent sizing */
+.sbi-refresh-status,
+.sbi-install-plugin,
+.sbi-activate-plugin,
+.sbi-deactivate-plugin {
+    min-height: 30px !important;
+    padding: 4px 12px !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    white-space: nowrap !important;
+}
+
+/* Ensure refresh button matches other button sizes */
+.sbi-refresh-status {
+    min-width: 80px !important;
+}
+
+/* Settings button styling */
+.column-actions a.button {
+    min-height: 30px !important;
+    padding: 4px 12px !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    text-decoration: none !important;
+    white-space: nowrap !important;
+}
+
+/* Protected plugin button styling - prevents accidental deactivation */
+.column-actions .button[disabled] {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    background-color: #f6f7f7 !important;
+    border-color: #ddd !important;
+    color: #666 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+}
+
+.column-actions .button[disabled]:hover,
+.column-actions .button[disabled]:focus {
+    background-color: #f6f7f7 !important;
+    border-color: #ddd !important;
+    color: #666 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Protected button shield icon styling */
+.column-actions .button[disabled] .dashicons-shield {
+    color: #d63638 !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    margin-right: 5px !important;
+    vertical-align: middle !important;
+}
+
+/* Dashicon styling within buttons */
+.sbi-refresh-status .dashicons,
+.column-actions .dashicons {
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    width: 13px !important;
+    height: 13px !important;
+    margin-right: 5px !important;
+    vertical-align: middle !important;
+}
+
+/* Enhanced refresh icon styling - 15% larger and moved up 2-3px */
+.sbi-refresh-status .dashicons-update {
+    font-size: 15px !important; /* 13px * 1.15 = ~15px */
+    width: 15px !important;
+    height: 15px !important;
+    transform: translateY(-2px) !important; /* Move up 2px */
+    margin-right: 5px !important;
+    vertical-align: middle !important;
+}
+
+/* Action column spacing */
+.column-actions {
+    white-space: nowrap !important;
+}
+
+.column-actions .button {
+    margin-right: 5px !important;
+}
+
+.column-actions .button:last-child {
+    margin-right: 0 !important;
+}
+
+/* Enhanced Error Display Styling */
+.sbi-error-display {
+    background: #fcf2f2 !important;
+    border-left: 3px solid #d63638 !important;
+    padding: 8px 12px !important;
+    margin: 4px 0 !important;
+    border-radius: 3px !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+}
+
+.sbi-error-display strong {
+    color: #d63638 !important;
+    font-weight: 600 !important;
+}
+
+.sbi-error-display small {
+    color: #666 !important;
+    font-size: 12px !important;
+}
+
+.sbi-error-display a {
+    color: #0073aa !important;
+    text-decoration: none !important;
+}
+
+.sbi-error-display a:hover {
+    color: #005a87 !important;
+    text-decoration: underline !important;
+}
+
+.sbi-error-display code {
+    background: #f1f1f1 !important;
+    padding: 2px 4px !important;
+    border-radius: 2px !important;
+    font-family: Consolas, Monaco, monospace !important;
+    font-size: 11px !important;
+}
+
+.sbi-error-display details {
+    margin-top: 8px !important;
+}
+
+.sbi-error-display details summary {
+    cursor: pointer !important;
+    font-size: 11px !important;
+    color: #666 !important;
+    outline: none !important;
+}
+
+.sbi-error-display details summary:hover {
+    color: #333 !important;
+}
+
+.sbi-error-display details[open] summary {
+    margin-bottom: 4px !important;
+}
+
+/* Enhanced Retry Button */
+.sbi-retry-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+    min-height: 24px !important;
+    background: #0073aa !important;
+    color: white !important;
+    border-color: #0073aa !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+}
+
+.sbi-retry-btn:hover {
+    background: #005a87 !important;
+    border-color: #005a87 !important;
+    color: white !important;
+}
+
+.sbi-retry-btn .dashicons {
+    font-size: 12px !important;
+    width: 12px !important;
+    height: 12px !important;
+    line-height: 1 !important;
+}
+
+/* Error Status Indicators */
+.sbi-error-display .error-status {
+    display: inline-block !important;
+    padding: 2px 6px !important;
+    border-radius: 2px !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    margin-top: 4px !important;
+}
+
+.sbi-error-display .error-status.non-recoverable {
+    background: #fcf2f2 !important;
+    color: #d63638 !important;
+    border: 1px solid #d63638 !important;
+}
+
+.sbi-error-display .error-status.max-retries {
+    background: #fcf8e3 !important;
+    color: #dba617 !important;
+    border: 1px solid #dba617 !important;
 }
 
 @keyframes sbi-spin {

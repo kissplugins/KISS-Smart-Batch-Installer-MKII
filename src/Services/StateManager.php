@@ -10,7 +10,32 @@ namespace SBI\Services;
 use SBI\Enums\PluginState;
 
 /**
- * Central arbiter for repository states.
+ * ⚠️ ⚠️ ⚠️ CRITICAL FSM STATE MANAGER - HANDLE WITH EXTREME CARE ⚠️ ⚠️ ⚠️
+ *
+ * This is the backend heart of the Smart Batch Installer's state management system.
+ * It manages state transitions, validation, and persistence for all repositories.
+ *
+ * BEFORE MODIFYING THIS CLASS:
+ * 1. Run Self Tests (Test Suite 3: State Management System)
+ * 2. Test all state transitions manually
+ * 3. Verify SSE integration still works
+ * 4. Check frontend FSM synchronization
+ * 5. Test with bulk operations
+ * 6. Validate state persistence across requests
+ *
+ * CRITICAL AREAS - DO NOT MODIFY WITHOUT EXTENSIVE TESTING:
+ * - State transition validation logic
+ * - State persistence and caching
+ * - SSE event emission
+ * - State refresh mechanisms
+ * - Error state handling
+ *
+ * INTEGRATION POINTS:
+ * - Frontend RepositoryFSM (TypeScript)
+ * - SSE real-time updates
+ * - AJAX handlers
+ * - Plugin installation pipeline
+ * - Error handling system
  */
 class StateManager {
     /**
@@ -19,6 +44,14 @@ class StateManager {
      * @var array<string, PluginState>
      */
     protected array $states = [];
+
+    /**
+     * State metadata storage for additional FSM context.
+     * Stores metadata like self-protection flags, error context, etc.
+     *
+     * @var array<string, array>
+     */
+    private array $state_metadata = [];
 
     /**
      * Allowed transitions cache.
@@ -66,12 +99,39 @@ class StateManager {
     }
 
     /**
-     * Transition to a new state with validation and event logging.
+     * ⚠️ ⚠️ ⚠️ CRITICAL STATE TRANSITION METHOD - CORE FSM OPERATION ⚠️ ⚠️ ⚠️
      *
-     * @param string $repository owner/repo
-     * @param PluginState $to_state target state
-     * @param array $context optional context (e.g., source, message)
-     * @param bool $force when true, bypass transition validation (used by refresh_state)
+     * This is the most critical method in the entire FSM system.
+     * ALL state changes flow through this method.
+     *
+     * BREAKING THIS WILL:
+     * - Stop all state transitions system-wide
+     * - Break frontend-backend state synchronization
+     * - Cause state corruption and inconsistencies
+     * - Break SSE real-time updates
+     * - Break bulk operations
+     * - Break plugin installation pipeline
+     *
+     * CRITICAL FEATURES:
+     * - State transition validation
+     * - SSE event emission for real-time updates
+     * - State persistence and caching
+     * - Event logging for debugging
+     * - Force mode for refresh operations
+     *
+     * TESTING REQUIREMENTS BEFORE ANY CHANGES:
+     * 1. Run Self Tests (Test Suite 3: State Management System)
+     * 2. Test all valid state transitions manually
+     * 3. Test invalid transition rejection
+     * 4. Test SSE event emission
+     * 5. Test force mode functionality
+     * 6. Test with bulk operations
+     * 7. Test frontend synchronization
+     *
+     * @param string $repository Repository identifier (owner/repo)
+     * @param PluginState $to_state Target state to transition to
+     * @param array $context Optional context (source, message, etc.)
+     * @param bool $force When true, bypass transition validation (used by refresh_state)
      */
     public function transition( string $repository, PluginState $to_state, array $context = [], bool $force = false ): void {
         $from_state = $this->states[$repository]->value ?? PluginState::UNKNOWN->value;
@@ -197,6 +257,123 @@ class StateManager {
     private function clear_error_context(string $repository): void {
         $key = 'sbi_error_context_' . md5($repository);
         delete_transient($key);
+    }
+
+    /**
+     * Set metadata for a repository state (FSM-centric approach).
+     *
+     * @param string $repository Repository identifier.
+     * @param array $metadata Metadata to store.
+     */
+    public function set_state_metadata(string $repository, array $metadata): void {
+        $this->state_metadata[$repository] = array_merge(
+            $this->state_metadata[$repository] ?? [],
+            $metadata
+        );
+    }
+
+    /**
+     * Get metadata for a repository state (FSM-centric approach).
+     *
+     * @param string $repository Repository identifier.
+     * @param string|null $key Specific metadata key to retrieve.
+     * @return mixed Metadata value or array of all metadata.
+     */
+    public function get_state_metadata(string $repository, ?string $key = null) {
+        $metadata = $this->state_metadata[$repository] ?? [];
+
+        if ($key !== null) {
+            return $metadata[$key] ?? null;
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * Check if repository is self-protected (FSM-centric self-detection).
+     *
+     * @param string $repository Repository identifier.
+     * @return bool True if repository should be protected from deactivation.
+     */
+    public function is_self_protected(string $repository): bool {
+        return $this->get_state_metadata($repository, 'self_protected') === true;
+    }
+
+    /**
+     * Detect and mark self-protection for repositories (FSM-centric approach).
+     *
+     * @param string $repository Repository identifier.
+     * @param string|null $plugin_file Plugin file path for additional verification.
+     */
+    public function detect_and_mark_self_protection(string $repository, ?string $plugin_file = null): void {
+        $is_self = $this->detect_self_plugin($repository, $plugin_file);
+
+        if ($is_self) {
+            $this->set_state_metadata($repository, [
+                'self_protected' => true,
+                'protection_reason' => 'Smart Batch Installer self-protection',
+                'detected_at' => time()
+            ]);
+        }
+    }
+
+    /**
+     * Detect if repository is the Smart Batch Installer itself (FSM-centric detection).
+     *
+     * @param string $repository Repository identifier.
+     * @param string|null $plugin_file Plugin file path for additional verification.
+     * @return bool True if this is the Smart Batch Installer plugin.
+     */
+    private function detect_self_plugin(string $repository, ?string $plugin_file = null): bool {
+        // Method 1: Plugin file path comparison (most reliable when installed)
+        if (!empty($plugin_file)) {
+            // Get current plugin's directory for comparison
+            $current_plugin_file = \plugin_basename(__FILE__);
+            $current_plugin_dir = dirname(dirname($current_plugin_file)); // Go up from Services to plugin root
+            $plugin_dir = dirname($plugin_file);
+
+            if ($plugin_dir === $current_plugin_dir) {
+                return true;
+            }
+        }
+
+        // Method 2: Repository name pattern matching
+        $repo_lower = strtolower($repository);
+        $self_patterns = [
+            'kiss-smart-batch-installer',
+            'smart-batch-installer',
+            'batch-installer',
+            'sbi',
+            'kiss-sbi'
+        ];
+
+        foreach ($self_patterns as $pattern) {
+            if (strpos($repo_lower, $pattern) !== false) {
+                return true;
+            }
+        }
+
+        // Method 3: MKII variant detection (enhanced)
+        if (strpos($repo_lower, 'mkii') !== false &&
+            (strpos($repo_lower, 'installer') !== false || strpos($repo_lower, 'batch') !== false)) {
+            return true;
+        }
+
+        // Method 4: Exact repository name matching (fallback for edge cases)
+        $exact_matches = [
+            'kiss-smart-batch-installer-mkii',
+            'KISS-Smart-Batch-Installer-MKII',
+            'kiss-smart-batch-installer',
+            'KISS-Smart-Batch-Installer'
+        ];
+
+        foreach ($exact_matches as $exact_match) {
+            if ($repository === $exact_match || $repo_lower === strtolower($exact_match)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -371,12 +548,22 @@ class StateManager {
     public function refresh_state( string $repository ): void {
         // Move through CHECKING to determined state; bypass transition validation for refresh
         $this->transition( $repository, PluginState::CHECKING, [ 'source' => 'refresh_state' ], true );
+
         // Consolidated detection + cache path
         $state = $this->determine_plugin_state( $repository );
         // If still unknown and not installed, try consolidated detect_plugin_state()
         if ( $state === PluginState::UNKNOWN ) {
             $state = $this->detect_plugin_state( $repository );
         }
+
+        // FSM-centric self-protection detection - check for ALL states, not just installed
+        $plugin_file = null;
+        if (in_array($state, [PluginState::INSTALLED_ACTIVE, PluginState::INSTALLED_INACTIVE], true)) {
+            $plugin_file = $this->getInstalledPluginFile($repository);
+        }
+        // Always run self-protection detection regardless of state
+        $this->detect_and_mark_self_protection($repository, $plugin_file);
+
         $this->transition( $repository, $state, [ 'source' => 'refresh_state' ], true );
     }
 

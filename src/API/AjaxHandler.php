@@ -12,6 +12,7 @@ use SBI\Services\GitHubService;
 use SBI\Services\PluginDetectionService;
 use SBI\Services\PluginInstallationService;
 use SBI\Services\StateManager;
+use SBI\Services\ValidationGuardService;
 use SBI\Enums\PluginState;
 
 /**
@@ -48,23 +49,33 @@ class AjaxHandler {
     private StateManager $state_manager;
 
     /**
+     * Validation guard service.
+     *
+     * @var ValidationGuardService
+     */
+    private ValidationGuardService $validation_guard;
+
+    /**
      * Constructor.
      *
      * @param GitHubService              $github_service       GitHub service.
      * @param PluginDetectionService     $detection_service    Plugin detection service.
      * @param PluginInstallationService  $installation_service Plugin installation service.
      * @param StateManager              $state_manager        State manager.
+     * @param ValidationGuardService     $validation_guard     Validation guard service.
      */
     public function __construct(
         GitHubService $github_service,
         PluginDetectionService $detection_service,
         PluginInstallationService $installation_service,
-        StateManager $state_manager
+        StateManager $state_manager,
+        ValidationGuardService $validation_guard
     ) {
         $this->github_service = $github_service;
         $this->detection_service = $detection_service;
         $this->installation_service = $installation_service;
         $this->state_manager = $state_manager;
+        $this->validation_guard = $validation_guard;
     }
 
     /**
@@ -168,18 +179,20 @@ class AjaxHandler {
 
         if ( empty( $account_name ) ) {
             error_log( 'SBI AJAX: fetch_repository_list failed - account name is empty' );
-            wp_send_json_error( [
-                'message' => __( 'Account name is required.', 'kiss-smart-batch-installer' )
-            ] );
+            $this->send_enhanced_error(
+                __( 'Account name is required.', 'kiss-smart-batch-installer' ),
+                [ 'error_code' => 'missing_account_name' ]
+            );
         }
 
         $repositories = $this->github_service->fetch_repositories_for_account( $account_name, $force_refresh, $limit );
 
         if ( is_wp_error( $repositories ) ) {
             error_log( sprintf( 'SBI AJAX: fetch_repository_list failed for %s: %s', $account_name, $repositories->get_error_message() ) );
-            wp_send_json_error( [
-                'message' => $repositories->get_error_message()
-            ] );
+            $this->send_enhanced_error(
+                $repositories->get_error_message(),
+                [ 'error_code' => 'github_api_error', 'account' => $account_name ]
+            );
         }
 
         // Best-effort: fetch total available public repos for checksum/visibility
@@ -492,6 +505,91 @@ class AjaxHandler {
                 'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
             ];
 
+            // Step 2: Pre-Installation Validation Guards
+            $debug_steps[] = [
+                'step' => 'Pre-Installation Validation',
+                'status' => 'starting',
+                'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+            ];
+
+            $this->send_progress_update( 'Pre-Installation Validation', 'info', 'Running comprehensive validation checks...' );
+
+            // Extract parameters for validation
+            $owner = sanitize_text_field( $_POST['owner'] ?? '' );
+            $repo = sanitize_text_field( $_POST['repository'] ?? '' );
+
+            // Run comprehensive pre-validation
+            $validation_result = $this->validation_guard->validate_installation_prerequisites( $owner, $repo );
+
+            if ( ! $validation_result['success'] ) {
+                $debug_steps[] = [
+                    'step' => 'Pre-Installation Validation',
+                    'status' => 'failed',
+                    'message' => 'Validation checks failed',
+                    'validation_summary' => $validation_result['summary'],
+                    'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+                ];
+
+                // Generate detailed validation failure message
+                $failed_validations = [];
+                $error_details = [];
+
+                foreach ( $validation_result['validations'] as $category => $result ) {
+                    if ( ! $result['success'] ) {
+                        $failed_validations[] = ucfirst( str_replace( '_', ' ', $category ) );
+
+                        // Collect specific errors for each category
+                        if ( ! empty( $result['errors'] ) ) {
+                            $error_details[ $category ] = $result['errors'];
+                        }
+                    }
+                }
+
+                $detailed_message = sprintf(
+                    'Installation prerequisites not met. Failed validations: %s',
+                    implode( ', ', $failed_validations )
+                );
+
+                // Add specific error details to debug steps
+                $debug_steps[] = [
+                    'step' => 'Validation Failure Details',
+                    'status' => 'failed',
+                    'message' => sprintf(
+                        '%d/%d validation checks failed',
+                        $validation_result['summary']['failed_checks'],
+                        $validation_result['summary']['total_checks']
+                    ),
+                    'failed_categories' => $failed_validations,
+                    'error_details' => $error_details,
+                    'recommendations' => $validation_result['recommendations'],
+                    'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+                ];
+
+                // Send detailed validation error
+                $this->send_enhanced_error(
+                    $detailed_message,
+                    [
+                        'error_code' => 'validation_failed',
+                        'validation_results' => $validation_result,
+                        'debug_steps' => $debug_steps,
+                        'failed_validations' => $failed_validations,
+                        'error_details' => $error_details
+                    ]
+                );
+            }
+
+            $debug_steps[] = [
+                'step' => 'Pre-Installation Validation',
+                'status' => 'completed',
+                'message' => sprintf(
+                    'All validation checks passed (%d/%d checks successful)',
+                    $validation_result['summary']['passed_checks'],
+                    $validation_result['summary']['total_checks']
+                ),
+                'validation_summary' => $validation_result['summary'],
+                'time' => round( ( microtime( true ) - $start_time ) * 1000, 2 )
+            ];
+
             $this->send_progress_update( 'Security Verification', 'success', 'Security checks passed' );
 
             // Step 2: Parameter validation
@@ -732,9 +830,47 @@ class AjaxHandler {
         $repo_name = sanitize_text_field( $_POST['repository'] ?? '' );
 
         if ( empty( $plugin_file ) ) {
-            wp_send_json_error( [
-                'message' => __( 'Plugin file is required.', 'kiss-smart-batch-installer' )
-            ] );
+            $this->send_enhanced_error(
+                __( 'Plugin file is required.', 'kiss-smart-batch-installer' ),
+                [ 'error_code' => 'missing_plugin_file' ]
+            );
+        }
+
+        // Pre-Activation Validation Guards
+        $validation_result = $this->validation_guard->validate_activation_prerequisites( $plugin_file, $repo_name );
+
+        if ( ! $validation_result['success'] ) {
+            // Generate detailed activation failure message
+            $failed_validations = [];
+            $error_details = [];
+
+            foreach ( $validation_result['validations'] as $category => $result ) {
+                if ( ! $result['success'] ) {
+                    $failed_validations[] = ucfirst( str_replace( '_', ' ', $category ) );
+
+                    // Collect specific errors for each category
+                    if ( ! empty( $result['errors'] ) ) {
+                        $error_details[ $category ] = $result['errors'];
+                    }
+                }
+            }
+
+            $detailed_message = sprintf(
+                'Activation prerequisites not met. Failed validations: %s',
+                implode( ', ', $failed_validations )
+            );
+
+            $this->send_enhanced_error(
+                $detailed_message,
+                [
+                    'error_code' => 'activation_validation_failed',
+                    'validation_results' => $validation_result,
+                    'plugin_file' => $plugin_file,
+                    'repository' => $repo_name,
+                    'failed_validations' => $failed_validations,
+                    'error_details' => $error_details
+                ]
+            );
         }
 
         $repo_full = $repo_name;
@@ -754,10 +890,10 @@ class AjaxHandler {
                 if ( ! empty( $repo_name ) ) {
                     $this->state_manager->transition( $repo_name, PluginState::ERROR, [ 'source' => 'ajax_activate' ] );
                 }
-                wp_send_json_error( [
-                    'message' => $result->get_error_message(),
-                    'repository' => $repo_name,
-                ] );
+                $this->send_enhanced_error(
+                    $result->get_error_message(),
+                    [ 'error_code' => 'activation_failed', 'repository' => $repo_name, 'plugin_file' => $plugin_file ]
+                );
             }
 
             // FSM: set repo active state
@@ -783,9 +919,10 @@ class AjaxHandler {
         $repo_name = sanitize_text_field( $_POST['repository'] ?? '' );
 
         if ( empty( $plugin_file ) ) {
-            wp_send_json_error( [
-                'message' => __( 'Plugin file is required.', 'kiss-smart-batch-installer' )
-            ] );
+            $this->send_enhanced_error(
+                __( 'Plugin file is required.', 'kiss-smart-batch-installer' ),
+                [ 'error_code' => 'missing_plugin_file' ]
+            );
         }
 
         $repo_full = $repo_name;
@@ -805,10 +942,10 @@ class AjaxHandler {
                 if ( ! empty( $repo_name ) ) {
                     $this->state_manager->transition( $repo_name, PluginState::ERROR, [ 'source' => 'ajax_deactivate' ] );
                 }
-                wp_send_json_error( [
-                    'message' => $result->get_error_message(),
-                    'repository' => $repo_name,
-                ] );
+                $this->send_enhanced_error(
+                    $result->get_error_message(),
+                    [ 'error_code' => 'deactivation_failed', 'repository' => $repo_name, 'plugin_file' => $plugin_file ]
+                );
             }
 
             // FSM: set repo inactive state
@@ -1148,15 +1285,236 @@ class AjaxHandler {
      */
     private function verify_nonce_and_capability(): void {
         if ( ! check_ajax_referer( 'sbi_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [
-                'message' => __( 'Security check failed.', 'kiss-smart-batch-installer' )
-            ] );
+            $this->send_enhanced_error(
+                __( 'Security check failed.', 'kiss-smart-batch-installer' ),
+                [ 'error_code' => 'security_check_failed' ]
+            );
         }
 
         if ( ! current_user_can( 'install_plugins' ) ) {
-            wp_send_json_error( [
-                'message' => __( 'Insufficient permissions.', 'kiss-smart-batch-installer' )
-            ] );
+            $this->send_enhanced_error(
+                __( 'Insufficient permissions.', 'kiss-smart-batch-installer' ),
+                [ 'error_code' => 'insufficient_permissions', 'required_capability' => 'install_plugins' ]
+            );
+        }
+    }
+
+    /**
+     * Enhanced error response with structured data for better frontend handling.
+     *
+     * @param string $message Error message.
+     * @param array  $context Additional context data.
+     */
+    private function send_enhanced_error( string $message, array $context = [] ): void {
+        // Detect error type from message for better frontend handling
+        $error_type = $this->detect_error_type( $message );
+
+        $error_response = [
+            'message' => $message,
+            'type' => $error_type,
+            'context' => $context,
+            'timestamp' => time(),
+            'recoverable' => $this->is_recoverable( $error_type ),
+            'retry_delay' => $this->get_retry_delay( $error_type ),
+            'severity' => $this->get_error_severity( $error_type ),
+        ];
+
+        // Add specific guidance based on error type
+        $error_response['guidance'] = $this->get_error_guidance( $error_type, $message, $context );
+
+        wp_send_json_error( $error_response );
+    }
+
+    /**
+     * Detect error type from message content.
+     *
+     * @param string $message Error message.
+     * @return string Error type.
+     */
+    private function detect_error_type( string $message ): string {
+        $lower_message = strtolower( $message );
+
+        // GitHub API errors
+        if ( strpos( $lower_message, 'rate limit' ) !== false ) return 'rate_limit';
+        if ( strpos( $lower_message, '404' ) !== false ) return 'not_found';
+        if ( strpos( $lower_message, '403' ) !== false ) return 'forbidden';
+        if ( strpos( $lower_message, '401' ) !== false ) return 'unauthorized';
+        if ( strpos( $lower_message, 'github' ) !== false ) return 'github_api';
+
+        // Network errors
+        if ( strpos( $lower_message, 'network' ) !== false ) return 'network';
+        if ( strpos( $lower_message, 'timeout' ) !== false ) return 'timeout';
+        if ( strpos( $lower_message, 'connection' ) !== false ) return 'connection';
+        if ( strpos( $lower_message, 'curl' ) !== false ) return 'network';
+
+        // WordPress errors
+        if ( strpos( $lower_message, 'permission' ) !== false ) return 'permission';
+        if ( strpos( $lower_message, 'activation' ) !== false ) return 'activation';
+        if ( strpos( $lower_message, 'deactivation' ) !== false ) return 'deactivation';
+        if ( strpos( $lower_message, 'installation' ) !== false ) return 'installation';
+        if ( strpos( $lower_message, 'download' ) !== false ) return 'download';
+        if ( strpos( $lower_message, 'package' ) !== false ) return 'package';
+        if ( strpos( $lower_message, 'memory' ) !== false ) return 'memory';
+        if ( strpos( $lower_message, 'fatal' ) !== false ) return 'fatal';
+
+        // Security errors
+        if ( strpos( $lower_message, 'security' ) !== false ) return 'security';
+        if ( strpos( $lower_message, 'nonce' ) !== false ) return 'security';
+
+        return 'generic';
+    }
+
+    /**
+     * Determine if an error type is recoverable.
+     *
+     * @param string $error_type Error type.
+     * @return bool Whether the error is recoverable.
+     */
+    private function is_recoverable( string $error_type ): bool {
+        $recoverable_types = [
+            'rate_limit', 'network', 'timeout', 'connection', 'github_api', 'generic'
+        ];
+        return in_array( $error_type, $recoverable_types, true );
+    }
+
+    /**
+     * Get retry delay for error type.
+     *
+     * @param string $error_type Error type.
+     * @return int Retry delay in seconds.
+     */
+    private function get_retry_delay( string $error_type ): int {
+        switch ( $error_type ) {
+            case 'rate_limit':
+                return 60; // 1 minute for rate limits
+            case 'network':
+            case 'timeout':
+            case 'connection':
+                return 5; // 5 seconds for network issues
+            case 'github_api':
+                return 10; // 10 seconds for GitHub API issues
+            default:
+                return 2; // 2 seconds default
+        }
+    }
+
+    /**
+     * Get error severity level.
+     *
+     * @param string $error_type Error type.
+     * @return string Severity level.
+     */
+    private function get_error_severity( string $error_type ): string {
+        switch ( $error_type ) {
+            case 'security':
+            case 'fatal':
+            case 'memory':
+                return 'critical';
+            case 'permission':
+            case 'forbidden':
+            case 'unauthorized':
+                return 'error';
+            case 'rate_limit':
+            case 'not_found':
+                return 'warning';
+            default:
+                return 'info';
+        }
+    }
+
+    /**
+     * Get error-specific guidance for users.
+     *
+     * @param string $error_type Error type.
+     * @param string $message Original error message.
+     * @param array  $context Error context.
+     * @return array Guidance information.
+     */
+    private function get_error_guidance( string $error_type, string $message, array $context ): array {
+        switch ( $error_type ) {
+            case 'rate_limit':
+                return [
+                    'title' => 'GitHub API Rate Limit',
+                    'description' => 'GitHub limits API requests to prevent abuse.',
+                    'actions' => [
+                        'Wait 5-10 minutes before trying again',
+                        'Consider using a GitHub personal access token for higher limits'
+                    ],
+                    'auto_retry' => true,
+                    'retry_in' => 300 // 5 minutes
+                ];
+
+            case 'not_found':
+                $repo = $context['repository'] ?? 'unknown';
+                return [
+                    'title' => 'Repository Not Found',
+                    'description' => 'The repository may be private, renamed, or deleted.',
+                    'actions' => [
+                        'Verify the repository exists and is public',
+                        'Check the spelling of owner and repository names',
+                        'Ensure you have access if the repository is private'
+                    ],
+                    'links' => [
+                        'github_url' => "https://github.com/{$repo}"
+                    ]
+                ];
+
+            case 'permission':
+                return [
+                    'title' => 'Permission Error',
+                    'description' => 'You do not have sufficient permissions for this action.',
+                    'actions' => [
+                        'Contact your WordPress administrator',
+                        'Ensure you have the required capabilities'
+                    ],
+                    'required_capability' => $context['required_capability'] ?? 'install_plugins'
+                ];
+
+            case 'network':
+            case 'timeout':
+            case 'connection':
+                return [
+                    'title' => 'Network Error',
+                    'description' => 'Unable to connect to the required service.',
+                    'actions' => [
+                        'Check your internet connection',
+                        'Try again in a few moments',
+                        'Contact your hosting provider if the issue persists'
+                    ],
+                    'auto_retry' => true
+                ];
+
+            case 'activation':
+                return [
+                    'title' => 'Plugin Activation Failed',
+                    'description' => 'The plugin could not be activated.',
+                    'actions' => [
+                        'Check for plugin compatibility issues',
+                        'Review WordPress error logs',
+                        'Ensure all plugin dependencies are met'
+                    ]
+                ];
+
+            case 'installation':
+                return [
+                    'title' => 'Installation Failed',
+                    'description' => 'The plugin could not be installed.',
+                    'actions' => [
+                        'Verify the repository contains a valid WordPress plugin',
+                        'Check available disk space',
+                        'Ensure proper file permissions'
+                    ]
+                ];
+
+            default:
+                return [
+                    'title' => 'Error Occurred',
+                    'description' => 'An unexpected error occurred.',
+                    'actions' => [
+                        'Try refreshing the repository status',
+                        'Contact support if the issue persists'
+                    ]
+                ];
         }
     }
 
