@@ -96,11 +96,8 @@ class RepositoryManager {
             <h1><?php esc_html_e( 'KISS Smart Batch Installer', 'kiss-smart-batch-installer' ); ?></h1>
 
             <p>
-                <a href="<?php echo esc_url( admin_url( 'plugins.php?page=sbi-new-self-tests' ) ); ?>" class="button button-primary">
-                    <?php esc_html_e( 'Run New Self Tests', 'kiss-smart-batch-installer' ); ?>
-                </a>
-                <a href="<?php echo esc_url( admin_url( 'plugins.php?page=sbi-self-tests' ) ); ?>" class="button">
-                    <?php esc_html_e( 'Run Old Self Tests', 'kiss-smart-batch-installer' ); ?>
+                <a href="<?php echo esc_url( admin_url( 'plugins.php?page=sbi-self-tests' ) ); ?>" class="button button-primary">
+                    <?php esc_html_e( 'Run Self Tests', 'kiss-smart-batch-installer' ); ?>
                 </a>
             </p>
 
