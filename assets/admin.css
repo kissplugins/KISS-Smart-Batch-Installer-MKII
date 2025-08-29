@@ -165,6 +165,63 @@
     min-height: 24px; /* Ensure enough height for spinner */
 }
 
+/* Button styling for consistent sizing */
+.sbi-refresh-status,
+.sbi-install-plugin,
+.sbi-activate-plugin,
+.sbi-deactivate-plugin {
+    min-height: 30px !important;
+    padding: 4px 12px !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    white-space: nowrap !important;
+}
+
+/* Ensure refresh button matches other button sizes */
+.sbi-refresh-status {
+    min-width: 80px !important;
+}
+
+/* Settings button styling */
+.column-actions a.button {
+    min-height: 30px !important;
+    padding: 4px 12px !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    text-decoration: none !important;
+    white-space: nowrap !important;
+}
+
+/* Dashicon styling within buttons */
+.sbi-refresh-status .dashicons,
+.column-actions .dashicons {
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    width: 13px !important;
+    height: 13px !important;
+    margin-right: 5px !important;
+    vertical-align: middle !important;
+}
+
+/* Action column spacing */
+.column-actions {
+    white-space: nowrap !important;
+}
+
+.column-actions .button {
+    margin-right: 5px !important;
+}
+
+.column-actions .button:last-child {
+    margin-right: 0 !important;
+}
+
 @keyframes sbi-spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
