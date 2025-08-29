@@ -10,7 +10,32 @@ namespace SBI\Services;
 use SBI\Enums\PluginState;
 
 /**
- * Central arbiter for repository states.
+ * ⚠️ ⚠️ ⚠️ CRITICAL FSM STATE MANAGER - HANDLE WITH EXTREME CARE ⚠️ ⚠️ ⚠️
+ *
+ * This is the backend heart of the Smart Batch Installer's state management system.
+ * It manages state transitions, validation, and persistence for all repositories.
+ *
+ * BEFORE MODIFYING THIS CLASS:
+ * 1. Run Self Tests (Test Suite 3: State Management System)
+ * 2. Test all state transitions manually
+ * 3. Verify SSE integration still works
+ * 4. Check frontend FSM synchronization
+ * 5. Test with bulk operations
+ * 6. Validate state persistence across requests
+ *
+ * CRITICAL AREAS - DO NOT MODIFY WITHOUT EXTENSIVE TESTING:
+ * - State transition validation logic
+ * - State persistence and caching
+ * - SSE event emission
+ * - State refresh mechanisms
+ * - Error state handling
+ *
+ * INTEGRATION POINTS:
+ * - Frontend RepositoryFSM (TypeScript)
+ * - SSE real-time updates
+ * - AJAX handlers
+ * - Plugin installation pipeline
+ * - Error handling system
  */
 class StateManager {
     /**
@@ -66,12 +91,39 @@ class StateManager {
     }
 
     /**
-     * Transition to a new state with validation and event logging.
+     * ⚠️ ⚠️ ⚠️ CRITICAL STATE TRANSITION METHOD - CORE FSM OPERATION ⚠️ ⚠️ ⚠️
      *
-     * @param string $repository owner/repo
-     * @param PluginState $to_state target state
-     * @param array $context optional context (e.g., source, message)
-     * @param bool $force when true, bypass transition validation (used by refresh_state)
+     * This is the most critical method in the entire FSM system.
+     * ALL state changes flow through this method.
+     *
+     * BREAKING THIS WILL:
+     * - Stop all state transitions system-wide
+     * - Break frontend-backend state synchronization
+     * - Cause state corruption and inconsistencies
+     * - Break SSE real-time updates
+     * - Break bulk operations
+     * - Break plugin installation pipeline
+     *
+     * CRITICAL FEATURES:
+     * - State transition validation
+     * - SSE event emission for real-time updates
+     * - State persistence and caching
+     * - Event logging for debugging
+     * - Force mode for refresh operations
+     *
+     * TESTING REQUIREMENTS BEFORE ANY CHANGES:
+     * 1. Run Self Tests (Test Suite 3: State Management System)
+     * 2. Test all valid state transitions manually
+     * 3. Test invalid transition rejection
+     * 4. Test SSE event emission
+     * 5. Test force mode functionality
+     * 6. Test with bulk operations
+     * 7. Test frontend synchronization
+     *
+     * @param string $repository Repository identifier (owner/repo)
+     * @param PluginState $to_state Target state to transition to
+     * @param array $context Optional context (source, message, etc.)
+     * @param bool $force When true, bypass transition validation (used by refresh_state)
      */
     public function transition( string $repository, PluginState $to_state, array $context = [], bool $force = false ): void {
         $from_state = $this->states[$repository]->value ?? PluginState::UNKNOWN->value;

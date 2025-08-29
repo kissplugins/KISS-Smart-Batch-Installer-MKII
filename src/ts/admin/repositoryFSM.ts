@@ -29,27 +29,119 @@ interface ErrorContext {
   };
 }
 
+/**
+ * ⚠️  CRITICAL FSM CORE CLASS - DO NOT REFACTOR WITHOUT CAREFUL CONSIDERATION ⚠️
+ *
+ * This is the heart of the Smart Batch Installer's state management system.
+ * Any changes to this class can break the entire plugin functionality.
+ *
+ * BEFORE MODIFYING:
+ * 1. Run Self Tests (Test Suite 3: State Management System)
+ * 2. Test all state transitions manually
+ * 3. Verify SSE integration still works
+ * 4. Check error handling doesn't break
+ * 5. Validate with multiple repositories
+ *
+ * PROTECTED AREAS:
+ * - State storage and retrieval (states Map)
+ * - Listener notification system
+ * - SSE event handling
+ * - Error context management
+ * - State transition validation
+ */
 export class RepositoryFSM {
+  // ⚠️ CORE STATE STORAGE - DO NOT MODIFY WITHOUT TESTING ⚠️
+  // This Map stores the current state of each repository
+  // Key: RepoId (owner/repo), Value: PluginState enum
   private states: StateMap = new Map();
+
+  // ⚠️ LISTENER SYSTEM - CRITICAL FOR UI UPDATES ⚠️
+  // These listeners notify the UI when states change
+  // Breaking this breaks all UI state synchronization
   private listeners: Set<Listener> = new Set();
+
+  // ⚠️ SSE CONNECTION - HANDLES REAL-TIME UPDATES ⚠️
+  // EventSource for Server-Sent Events from backend
+  // Modifying this can break real-time state updates
   private eventSource: EventSource | null = null;
   private sseEnabled = false;
+
+  // ⚠️ ERROR HANDLING SYSTEM - ENHANCED IN v1.0.32 ⚠️
+  // Stores error context for each repository
+  // Contains enhanced error messages and recovery information
   private errorContexts: Map<RepoId, ErrorContext> = new Map();
+
+  // ⚠️ RETRY CONFIGURATION - AFFECTS AUTO-RECOVERY ⚠️
+  // These values control automatic error recovery behavior
+  // Changes affect user experience during transient errors
   private maxRetries = 3;
   private retryDelayMs = 5000;
 
+  /**
+   * ⚠️ CRITICAL LISTENER REGISTRATION - DO NOT MODIFY ⚠️
+   *
+   * This method is the foundation of the FSM's observer pattern.
+   * UI components use this to receive state change notifications.
+   *
+   * BREAKING THIS WILL:
+   * - Stop UI updates when states change
+   * - Break real-time repository status display
+   * - Cause stale UI states
+   *
+   * @param listener Function called when any repository state changes
+   * @returns Cleanup function to remove the listener
+   */
   onChange(listener: Listener): () => void {
+    // ⚠️ DO NOT MODIFY - Core listener registration
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * ⚠️ CORE STATE RETRIEVAL - FOUNDATION METHOD ⚠️
+   *
+   * This is the primary way to get a repository's current state.
+   * Used throughout the codebase for state-dependent logic.
+   *
+   * BREAKING THIS WILL:
+   * - Break all state-dependent UI rendering
+   * - Cause incorrect button states (Install/Activate/etc.)
+   * - Break bulk operations
+   *
+   * @param repo Repository identifier (owner/repo)
+   * @returns Current state or undefined if not tracked
+   */
   get(repo: RepoId): PluginState | undefined {
+    // ⚠️ DO NOT MODIFY - Direct state map access
     return this.states.get(repo);
   }
 
+  /**
+   * ⚠️ CRITICAL STATE SETTER - CORE FSM OPERATION ⚠️
+   *
+   * This method is the heart of the FSM. It updates state and notifies listeners.
+   * Every state change in the system goes through this method.
+   *
+   * BREAKING THIS WILL:
+   * - Stop all state updates
+   * - Break UI synchronization
+   * - Cause system-wide state corruption
+   * - Break SSE integration
+   *
+   * @param repo Repository identifier
+   * @param state New state to set
+   */
   set(repo: RepoId, state: PluginState): void {
+    // ⚠️ CRITICAL STATE UPDATE SEQUENCE - DO NOT MODIFY ORDER ⚠️
+
+    // 1. Get previous state for debugging (safe to modify)
     const prev = this.states.get(repo);
+
+    // 2. ⚠️ CORE STATE UPDATE - DO NOT MODIFY ⚠️
+    // This is the fundamental state storage operation
     this.states.set(repo, state);
+
+    // 3. Debug logging (safe to modify, but preserve functionality)
     // Always enable debug logging in development (browser environment)
     if (true) {
       try {
@@ -63,6 +155,10 @@ export class RepositoryFSM {
         }
       } catch {}
     }
+
+    // 4. ⚠️ CRITICAL LISTENER NOTIFICATION - DO NOT MODIFY ⚠️
+    // This notifies all UI components of the state change
+    // Breaking this breaks all UI synchronization
     this.listeners.forEach((fn) => fn(repo, state));
   }
 
@@ -96,7 +192,29 @@ export class RepositoryFSM {
     }
   }
 
-  // SSE Integration Methods
+  // ⚠️ ⚠️ ⚠️ CRITICAL SSE INTEGRATION METHODS - HANDLE WITH EXTREME CARE ⚠️ ⚠️ ⚠️
+
+  /**
+   * ⚠️ CRITICAL SSE INITIALIZATION - DO NOT MODIFY WITHOUT EXTENSIVE TESTING ⚠️
+   *
+   * This method establishes the real-time connection between frontend and backend.
+   * It enables live state updates without page refreshes.
+   *
+   * BREAKING THIS WILL:
+   * - Stop all real-time state updates
+   * - Force users to manually refresh to see changes
+   * - Break bulk operation progress tracking
+   * - Cause state synchronization issues
+   *
+   * TESTING REQUIREMENTS BEFORE CHANGES:
+   * 1. Test SSE connection establishment
+   * 2. Test state_changed event handling
+   * 3. Test error recovery and reconnection
+   * 4. Test with multiple browser tabs
+   * 5. Test with network interruptions
+   *
+   * @param windowObj Window object containing sbiAjax configuration
+   */
   initSSE(windowObj: Window): void {
     const w = windowObj as any;
     if (!w.sbiAjax || this.eventSource) return;
@@ -121,17 +239,24 @@ export class RepositoryFSM {
         // Auto-reconnect is handled by EventSource
       });
 
+      // ⚠️ CRITICAL SSE EVENT HANDLER - DO NOT MODIFY ⚠️
+      // This handles real-time state updates from the backend
       this.eventSource.addEventListener('state_changed', (e) => {
         try {
+          // ⚠️ CRITICAL PAYLOAD PARSING - DO NOT CHANGE FORMAT ⚠️
           const payload = JSON.parse(e.data || '{}');
           const repo = payload.repository;
           const toState = payload.to;
 
           if (repo && toState) {
             this.debugLog(`SSE state update: ${repo} -> ${toState}`);
+
+            // ⚠️ CRITICAL STATE CONVERSION - DO NOT MODIFY ⚠️
             // Convert string state to PluginState enum
             const state = this.stringToPluginState(toState);
             if (state) {
+              // ⚠️ CRITICAL STATE UPDATE - USES CORE FSM METHOD ⚠️
+              // This triggers the full state update and notification chain
               this.set(repo, state);
               this.applyToRow(repo, state);
             }
@@ -185,10 +310,31 @@ export class RepositoryFSM {
     return this.get(repo) === state;
   }
 
-  // Enhanced Error Handling Methods
+  // ⚠️ ⚠️ ⚠️ ENHANCED ERROR HANDLING METHODS - v1.0.32 CRITICAL FEATURES ⚠️ ⚠️ ⚠️
 
   /**
-   * Convert raw error messages to user-friendly, actionable messages with recovery suggestions
+   * ⚠️ CRITICAL ERROR MESSAGE ENHANCEMENT - DO NOT MODIFY PATTERNS ⚠️
+   *
+   * This method transforms raw error messages into user-friendly, actionable guidance.
+   * It's a core part of the Enhanced Error Messages system implemented in v1.0.32.
+   *
+   * BREAKING THIS WILL:
+   * - Return users to cryptic, unhelpful error messages
+   * - Break auto-retry suggestions and links
+   * - Remove actionable recovery guidance
+   * - Cause user confusion and support tickets
+   *
+   * TESTING REQUIREMENTS:
+   * 1. Test all error patterns (rate limit, 404, network, permission, etc.)
+   * 2. Verify HTML formatting doesn't break UI
+   * 3. Test auto-refresh links work correctly
+   * 4. Validate GitHub repository links
+   * 5. Run Self Tests (Test Suite 8: Error Handling System)
+   *
+   * @param errorMessage Raw error message from backend/API
+   * @param source Error source (github_api, install, activate, etc.)
+   * @param repo Repository identifier for contextual links
+   * @returns Enhanced HTML error message with recovery guidance
    */
   private getActionableErrorMessage(errorMessage: string, source: string, repo: RepoId): string {
     const lowerMessage = errorMessage.toLowerCase();
@@ -268,6 +414,29 @@ export class RepositoryFSM {
             <em>Use the Retry button below if available.</em></small>`;
   }
 
+  /**
+   * ⚠️ CRITICAL ERROR STATE SETTER - CORE ERROR HANDLING ⚠️
+   *
+   * This method is the primary way to set error states in the FSM.
+   * It integrates with the Enhanced Error Messages system and auto-retry logic.
+   *
+   * BREAKING THIS WILL:
+   * - Stop error state tracking
+   * - Break enhanced error message display
+   * - Disable auto-retry functionality
+   * - Cause error state corruption
+   *
+   * INTEGRATION POINTS:
+   * - Uses getActionableErrorMessage() for user-friendly messages
+   * - Triggers auto-retry for transient errors
+   * - Updates FSM state to ERROR
+   * - Stores error context for UI display
+   *
+   * @param repo Repository identifier
+   * @param message Raw error message
+   * @param source Error source identifier
+   * @param recoverable Whether error can be retried
+   */
   setError(repo: RepoId, message: string, source: string, recoverable: boolean = true): void {
     // Enhanced: Convert raw error message to actionable user-friendly message
     const actionableMessage = this.getActionableErrorMessage(message, source, repo);
