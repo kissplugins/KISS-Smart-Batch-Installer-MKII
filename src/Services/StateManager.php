@@ -328,7 +328,7 @@ class StateManager {
         // Method 1: Plugin file path comparison (most reliable when installed)
         if (!empty($plugin_file)) {
             // Get current plugin's directory for comparison
-            $current_plugin_file = plugin_basename(__FILE__);
+            $current_plugin_file = \plugin_basename(__FILE__);
             $current_plugin_dir = dirname(dirname($current_plugin_file)); // Go up from Services to plugin root
             $plugin_dir = dirname($plugin_file);
 
@@ -353,10 +353,24 @@ class StateManager {
             }
         }
 
-        // Method 3: MKII variant detection
+        // Method 3: MKII variant detection (enhanced)
         if (strpos($repo_lower, 'mkii') !== false &&
             (strpos($repo_lower, 'installer') !== false || strpos($repo_lower, 'batch') !== false)) {
             return true;
+        }
+
+        // Method 4: Exact repository name matching (fallback for edge cases)
+        $exact_matches = [
+            'kiss-smart-batch-installer-mkii',
+            'KISS-Smart-Batch-Installer-MKII',
+            'kiss-smart-batch-installer',
+            'KISS-Smart-Batch-Installer'
+        ];
+
+        foreach ($exact_matches as $exact_match) {
+            if ($repository === $exact_match || $repo_lower === strtolower($exact_match)) {
+                return true;
+            }
         }
 
         return false;
@@ -542,11 +556,12 @@ class StateManager {
             $state = $this->detect_plugin_state( $repository );
         }
 
-        // FSM-centric self-protection detection
+        // FSM-centric self-protection detection - check for ALL states, not just installed
         $plugin_file = null;
         if (in_array($state, [PluginState::INSTALLED_ACTIVE, PluginState::INSTALLED_INACTIVE], true)) {
             $plugin_file = $this->getInstalledPluginFile($repository);
         }
+        // Always run self-protection detection regardless of state
         $this->detect_and_mark_self_protection($repository, $plugin_file);
 
         $this->transition( $repository, $state, [ 'source' => 'refresh_state' ], true );

@@ -5,6 +5,20 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.36] - 2024-12-29
+
+### Fixed
+- **Self-Protection Detection**: Fixed issue where self-protection wasn't being applied to "KISS-Smart-Batch-Installer-MKII"
+  - Enhanced repository name pattern matching with exact name fallbacks
+  - Moved self-protection detection outside state condition to ensure it runs for all plugin states
+  - Added Method 4: Exact repository name matching for edge cases
+  - Self-protection now properly disables deactivate button for SBI plugin in repository list
+
+### Changed
+- **StateManager**: Self-protection detection now runs regardless of plugin installation state
+  - Previously only checked for INSTALLED_ACTIVE/INSTALLED_INACTIVE states
+  - Now ensures protection is applied even during state transitions or detection issues
+
 ## [1.0.35] - 2024-12-29
 
 ### Added
