@@ -1004,6 +1004,62 @@ class RepositoryManager {
                 }
             }
 
+            // 🔍 FSM AVAILABILITY CHECKER
+            function checkFSMAvailability() {
+                var available = !!(window.SBIts &&
+                                 window.SBIts.repositoryFSM &&
+                                 typeof window.SBIts.repositoryFSM.setFilter === 'function' &&
+                                 typeof window.SBIts.repositoryFSM.getFilterState === 'function');
+
+                debugLog('🔍 FSM availability check: ' + (available ? 'AVAILABLE' : 'NOT AVAILABLE'));
+
+                if (!available) {
+                    if (!window.SBIts) {
+                        debugLog('❌ window.SBIts not found');
+                    } else if (!window.SBIts.repositoryFSM) {
+                        debugLog('❌ repositoryFSM not found on window.SBIts');
+                    } else {
+                        debugLog('❌ repositoryFSM methods not available');
+                    }
+                }
+
+                return available;
+            }
+
+            // 🔍 FALLBACK DOM FILTER FUNCTION
+            function applyFallbackFilter(searchTerm) {
+                debugLog('🔍 Applying fallback DOM filter: "' + searchTerm + '"');
+
+                if (!searchTerm || searchTerm.trim() === '') {
+                    debugLog('🔍 Empty search term, showing all repositories');
+                    $('#sbi-repository-tbody tr[data-repository]').show();
+                    $('.sbi-filter-status').hide();
+                    return;
+                }
+
+                var visibleCount = 0;
+                var totalCount = $('#sbi-repository-tbody tr[data-repository]').length;
+
+                $('#sbi-repository-tbody tr[data-repository]').each(function() {
+                    var $row = $(this);
+                    var repository = $row.data('repository') || '';
+                    var description = $row.find('.repository-description').text() || '';
+                    var searchText = (repository + ' ' + description).toLowerCase();
+                    var searchLower = searchTerm.toLowerCase();
+
+                    if (searchText.indexOf(searchLower) !== -1) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+
+                // Update filter status
+                $('.sbi-filter-status').text('Showing ' + visibleCount + ' of ' + totalCount + ' repositories (fallback mode)').show();
+                debugLog('🔍 Fallback filter applied: ' + visibleCount + '/' + totalCount + ' repositories visible');
+            }
+
             // 🔍 FILTER HANDLERS SETUP - Set up input handlers for immediate availability
             function setupFilterHandlers() {
                 debugLog('🔍 Setting up filter input handlers');
@@ -1037,7 +1093,10 @@ class RepositoryManager {
                         // Save to session storage immediately
                         saveFilterToSession(searchTerm);
 
-                        if (window.SBIts && window.SBIts.repositoryFSM) {
+                        // 🔍 ENHANCED FSM AVAILABILITY CHECK
+                        var fsmAvailable = checkFSMAvailability();
+
+                        if (fsmAvailable) {
                             debugLog('🔍 FSM available, calling setFilter()');
                             window.SBIts.repositoryFSM.setFilter(searchTerm);
 
@@ -1052,13 +1111,14 @@ class RepositoryManager {
                                 loadRepositories(); // This will now pre-filter before processing
                             }
                         } else {
-                            debugLog('🔍 FSM not available yet, filter will be applied when repositories load');
+                            debugLog('🔍 FSM not available, using fallback DOM filtering');
 
-                            // Show immediate feedback even without FSM
+                            // Apply immediate DOM filtering as fallback
+                            applyFallbackFilter(searchTerm);
+
+                            // Show feedback about fallback mode
                             if (searchTerm.trim()) {
-                                $('.sbi-filter-status').text('Filter "' + searchTerm + '" will be applied when repositories load').show();
-                            } else {
-                                $('.sbi-filter-status').hide();
+                                $('.sbi-filter-status').text('Filter applied (fallback mode) - showing ' + $('#sbi-repository-tbody tr[data-repository]:visible').length + ' repositories').show();
                             }
                         }
                     }, 2500); // 2.5 seconds debounce
@@ -1072,11 +1132,14 @@ class RepositoryManager {
                     // Clear session storage
                     clearFilterFromSession();
 
-                    if (window.SBIts && window.SBIts.repositoryFSM) {
+                    // Check FSM availability and clear appropriately
+                    if (checkFSMAvailability()) {
                         debugLog('🔍 FSM available, calling clearFilter()');
                         window.SBIts.repositoryFSM.clearFilter();
                     } else {
-                        debugLog('🔍 FSM not available, clearing filter status');
+                        debugLog('🔍 FSM not available, using fallback clear');
+                        // Show all repositories and hide filter status
+                        $('#sbi-repository-tbody tr[data-repository]').show();
                         $('.sbi-filter-status').hide();
                     }
                 });
@@ -1968,27 +2031,57 @@ class RepositoryManager {
             // Listen for TypeScript bridge ready event (preferred method)
             $(window).on('sbi:ts-bridge-ready', function(event) {
                 debugLog('🔍 TypeScript bridge ready event received', 'success');
-                if (window.SBIts && window.SBIts.repositoryFSM) {
-                    debugLog('🔍 FSM available via bridge event, initializing filter');
+
+                // Verify FSM is actually available
+                if (checkFSMAvailability()) {
+                    debugLog('🔍 FSM confirmed available via bridge event');
 
                     // Initialize filter if repositories are already loaded
                     if ($('.sbi-filter-container').is(':visible') && $('#sbi-repository-tbody tr').length > 0) {
                         debugLog('🔍 Bridge-triggered FSM initialization for filter');
-                        window.SBIts.repositoryFSM.loadFilterFromSession();
+
+                        // Check if there's a stored filter to restore
+                        try {
+                            var stored = sessionStorage.getItem('sbi_repository_filter');
+                            if (stored) {
+                                var filterData = JSON.parse(stored);
+                                if (filterData.searchTerm) {
+                                    debugLog('🔍 Applying stored filter via FSM: "' + filterData.searchTerm + '"');
+                                    window.SBIts.repositoryFSM.setFilter(filterData.searchTerm);
+                                }
+                            }
+                        } catch (error) {
+                            debugLog('❌ Failed to restore filter via FSM: ' + error.message, 'error');
+                        }
                     }
+                } else {
+                    debugLog('❌ Bridge ready event received but FSM still not available');
                 }
             });
 
             // Additional debugging: Monitor FSM availability (fallback)
             var fsmCheckInterval = setInterval(function() {
-                if (window.SBIts && window.SBIts.repositoryFSM) {
+                if (checkFSMAvailability()) {
                     debugLog('🔍 FSM became available via polling, clearing check interval');
                     clearInterval(fsmCheckInterval);
 
                     // Try to initialize filter if not already done
                     if ($('.sbi-filter-container').is(':visible') && $('#sbi-repository-tbody tr').length > 0) {
                         debugLog('🔍 Late FSM initialization for filter');
-                        window.SBIts.repositoryFSM.loadFilterFromSession();
+
+                        // Check if there's a stored filter to restore
+                        try {
+                            var stored = sessionStorage.getItem('sbi_repository_filter');
+                            if (stored) {
+                                var filterData = JSON.parse(stored);
+                                if (filterData.searchTerm) {
+                                    debugLog('🔍 Applying stored filter via late FSM: "' + filterData.searchTerm + '"');
+                                    window.SBIts.repositoryFSM.setFilter(filterData.searchTerm);
+                                }
+                            }
+                        } catch (error) {
+                            debugLog('❌ Failed to restore filter via late FSM: ' + error.message, 'error');
+                        }
                     }
                 }
             }, 500);
