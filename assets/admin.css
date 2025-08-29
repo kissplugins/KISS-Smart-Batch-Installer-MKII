@@ -209,6 +209,16 @@
     vertical-align: middle !important;
 }
 
+/* Enhanced refresh icon styling - 15% larger and moved up 2-3px */
+.sbi-refresh-status .dashicons-update {
+    font-size: 15px !important; /* 13px * 1.15 = ~15px */
+    width: 15px !important;
+    height: 15px !important;
+    transform: translateY(-2px) !important; /* Move up 2px */
+    margin-right: 5px !important;
+    vertical-align: middle !important;
+}
+
 /* Action column spacing */
 .column-actions {
     white-space: nowrap !important;
