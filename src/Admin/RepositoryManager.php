@@ -1017,7 +1017,14 @@ class RepositoryManager {
                     // Clear previous timeout
                     clearTimeout(filterTimeout);
 
-                    // Debounce filter application (300ms delay)
+                    // Show "typing..." indicator
+                    if (searchTerm.trim()) {
+                        $('.sbi-filter-status').text('Typing... (filter will apply in 2.5 seconds)').show();
+                    } else {
+                        $('.sbi-filter-status').hide();
+                    }
+
+                    // Debounce filter application (2.5 seconds delay for better UX)
                     filterTimeout = setTimeout(function() {
                         debugLog('🔍 Applying filter: "' + searchTerm + '"');
 
@@ -1054,7 +1061,7 @@ class RepositoryManager {
                                 $('.sbi-filter-status').hide();
                             }
                         }
-                    }, 300);
+                    }, 2500); // 2.5 seconds debounce
                 });
 
                 // Clear filter button handler
