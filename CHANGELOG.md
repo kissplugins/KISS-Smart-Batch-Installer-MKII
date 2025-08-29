@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.36] - 2024-12-29
 
+#### Future Integration Discovery for Git Updater
+
+### Added
+- Added Doc with Git Updater in /docs/PROJECT-KISS-SBI-INTEGRATION.md
+
 ### Fixed
 - **Self-Protection Detection**: Fixed issue where self-protection wasn't being applied to "KISS-Smart-Batch-Installer-MKII"
   - Enhanced repository name pattern matching with exact name fallbacks
