@@ -14,6 +14,19 @@ interface ErrorContext {
   retryCount: number;
   lastRetryAt?: number;
   recoverable: boolean;
+  // Enhanced fields from PHP backend
+  type?: string;
+  severity?: string;
+  retry_delay?: number;
+  guidance?: {
+    title?: string;
+    description?: string;
+    actions?: string[];
+    auto_retry?: boolean;
+    retry_in?: number;
+    links?: Record<string, string>;
+    required_capability?: string;
+  };
 }
 
 export class RepositoryFSM {
@@ -279,6 +292,38 @@ export class RepositoryFSM {
     }
   }
 
+  /**
+   * Set error from enhanced backend response with structured data
+   */
+  setErrorFromResponse(repo: RepoId, errorResponse: any, source: string): void {
+    // Use backend-provided message or fall back to generic
+    const message = errorResponse.message || 'An error occurred';
+
+    // Create enhanced error context with backend data
+    const errorContext: ErrorContext = {
+      timestamp: Date.now(),
+      message: this.getActionableErrorMessage(message, source, repo),
+      source,
+      retryCount: 0,
+      recoverable: errorResponse.recoverable !== false, // Default to true unless explicitly false
+      type: errorResponse.type,
+      severity: errorResponse.severity,
+      retry_delay: errorResponse.retry_delay,
+      guidance: errorResponse.guidance
+    };
+
+    this.errorContexts.set(repo, errorContext);
+    this.set(repo, PluginState.ERROR);
+    this.debugLog(`Enhanced error set for ${repo}: ${message} (type: ${errorResponse.type}, severity: ${errorResponse.severity})`, 'error');
+
+    // Use backend-suggested retry delay or auto-retry logic
+    if (errorContext.recoverable && (errorResponse.guidance?.auto_retry || this.shouldAutoRetry(message))) {
+      const retryDelay = (errorResponse.retry_delay || this.getRetryDelay(message, 0)) * 1000; // Convert to milliseconds
+      this.debugLog(`Auto-retry scheduled for ${repo} in ${retryDelay}ms (backend suggested: ${errorResponse.retry_delay}s)`);
+      setTimeout(() => this.retryRepository(repo), retryDelay);
+    }
+  }
+
   getErrorContext(repo: RepoId): ErrorContext | null {
     return this.errorContexts.get(repo) || null;
   }
@@ -415,8 +460,43 @@ export class RepositoryFSM {
     // Enhanced error display with actionable messages
     const timeAgo = this.formatTimeAgo(errorContext.timestamp);
 
-    // The message already contains enhanced HTML formatting from getActionableErrorMessage
-    let errorHtml = errorContext.message;
+    // Use backend guidance if available, otherwise use enhanced message
+    let errorHtml = '';
+
+    if (errorContext.guidance) {
+      // Display backend-provided guidance
+      errorHtml = `<strong>${errorContext.guidance.title || 'Error'}</strong><br>`;
+      if (errorContext.guidance.description) {
+        errorHtml += `<small>${errorContext.guidance.description}</small><br>`;
+      }
+
+      // Add action items
+      if (errorContext.guidance.actions && errorContext.guidance.actions.length > 0) {
+        errorHtml += `<small><strong>What you can do:</strong><br>`;
+        errorContext.guidance.actions.forEach(action => {
+          errorHtml += `• ${action}<br>`;
+        });
+        errorHtml += `</small>`;
+      }
+
+      // Add helpful links
+      if (errorContext.guidance.links) {
+        Object.entries(errorContext.guidance.links).forEach(([key, url]) => {
+          if (key === 'github_url') {
+            errorHtml += `<br><small><a href="${url}" target="_blank" style="color: #0073aa;">View on GitHub</a></small>`;
+          }
+        });
+      }
+
+      // Show auto-retry information
+      if (errorContext.guidance.auto_retry && errorContext.guidance.retry_in) {
+        const retryMinutes = Math.ceil(errorContext.guidance.retry_in / 60);
+        errorHtml += `<br><small><em>Auto-retry in ${retryMinutes} minute${retryMinutes > 1 ? 's' : ''}</em></small>`;
+      }
+    } else {
+      // Fall back to enhanced message from getActionableErrorMessage
+      errorHtml = errorContext.message;
+    }
 
     // Add technical details in a collapsible section for debugging
     errorHtml += `<br><details style="margin-top: 8px;">
@@ -424,6 +504,14 @@ export class RepositoryFSM {
                     <div style="margin-top: 4px; font-size: 11px; color: #666;">
                       <strong>Source:</strong> ${errorContext.source}<br>
                       <strong>Time:</strong> ${timeAgo}`;
+
+    if (errorContext.type) {
+      errorHtml += `<br><strong>Type:</strong> ${errorContext.type}`;
+    }
+
+    if (errorContext.severity) {
+      errorHtml += `<br><strong>Severity:</strong> ${errorContext.severity}`;
+    }
 
     if (errorContext.retryCount > 0) {
       errorHtml += `<br><strong>Retries:</strong> ${errorContext.retryCount}/${this.maxRetries}`;

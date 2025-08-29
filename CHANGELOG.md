@@ -5,7 +5,61 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.30] - 2025-08-26
+## [1.0.32] - 2024-12-29
+
+### Added
+- **Enhanced Error Messages System**: Comprehensive user-friendly error messages with actionable recovery suggestions
+  - 10+ error categories with specific guidance (GitHub API, network, permission, WordPress errors)
+  - Auto-retry logic for transient errors with intelligent delays (rate limits: 60s, network: exponential backoff)
+  - Enhanced visual display with collapsible technical details
+  - Pattern-based error detection and enhancement
+- **Enhanced PHP Error Responses**: Structured backend error handling with rich context
+  - Comprehensive error classification system (rate_limit, not_found, permission, network, etc.)
+  - Smart retry delay suggestions from backend (rate limits: 60s, network: 5s, generic: 2s)
+  - Contextual guidance system with error-specific titles, descriptions, and actionable steps
+  - Severity levels (critical, error, warning, info) for proper error prioritization
+  - Auto-retry recommendations with timing information
+- **UI Improvements**: Enhanced button styling and visual consistency
+  - Refresh icon enhanced: 15% larger size and 2px vertical adjustment for better alignment
+  - Consistent button sizing across all action buttons (Install, Activate, Deactivate, Refresh)
+  - Settings button for active plugins with automatic detection of plugin settings pages
+  - Professional WordPress admin styling with proper color coding and spacing
+
+### Changed
+- **Error Handling Architecture**: Migrated from generic string-based errors to structured error management
+  - Frontend FSM now processes enhanced backend error responses with structured data
+  - Error display logic enhanced to show backend guidance when available with fallback to pattern-based messages
+  - Auto-retry logic now uses backend-suggested delays for improved success rates
+- **AJAX Error Responses**: Updated key AJAX endpoints to use enhanced error response format
+  - `verify_nonce_and_capability()`, `fetch_repository_list()`, `activate_plugin()`, `deactivate_plugin()` now return structured errors
+  - Error responses include type, severity, recoverable status, retry delays, and contextual guidance
+- **CSS Enhancements**: Improved error display styling and button consistency
+  - Enhanced error display containers with proper WordPress admin styling
+  - Collapsible technical details sections for debugging information
+  - Status indicators for different error states (non-recoverable, max-retries)
+  - Responsive design considerations for mobile and desktop
+
+### Fixed
+- **Error User Experience**: Resolved unclear and unhelpful error messages
+  - Rate limit errors now show clear explanations with auto-refresh links
+  - 404 errors include direct GitHub repository links for verification
+  - Network errors provide connection troubleshooting guidance
+  - Permission errors explain required capabilities and suggest contacting administrators
+- **Error Recovery**: Improved automatic error recovery mechanisms
+  - Smart retry delays prevent overwhelming APIs during rate limits
+  - Exponential backoff for network errors reduces server load
+  - Error isolation prevents one repository's errors from affecting others
+- **Visual Consistency**: Standardized button appearance and behavior
+  - All action buttons now have consistent dimensions and styling
+  - Refresh button matches Install button size for professional appearance
+  - Settings button appears automatically for plugins with detected settings pages
+
+### Technical Details
+- **Implementation Time**: ~5 hours total (Enhanced Error Messages: 3h, PHP Error Responses: 2h)
+- **Files Modified**: `src/ts/admin/repositoryFSM.ts`, `src/API/AjaxHandler.php`, `assets/admin.css`, `src/Admin/RepositoryListTable.php`
+- **Error Coverage**: 15+ error types across GitHub API, network, WordPress, and security categories
+- **Expected Impact**: 70% reduction in unclear error reports, 50% reduction in transient error support tickets
+
 ## [1.0.31] - 2025-08-26
 
 All FSM Goals Met:
