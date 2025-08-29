@@ -5,6 +5,34 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.39] - 2024-12-29
+
+### Added
+- **FSM-First Repository Filtering**: Client-side repository search and filtering capability
+  - Added search input field and "Clear Filter" button to repository list interface
+  - Implemented session-persistent filtering that survives page refreshes
+  - FSM-centric approach maintains all repository states while filtering display
+  - Honors repository limits - filters only within loaded repositories (no additional API calls)
+  - Real-time filtering with 300ms debouncing for optimal performance
+  - Filter status display shows "Showing X of Y repositories" when active
+
+### Changed
+- **RepositoryFSM**: Enhanced with comprehensive filtering state management
+  - Added FilterState interface with search term, matched repositories, and session persistence
+  - Implemented filter methods: setFilter(), clearFilter(), refreshFilter(), loadFilterFromSession()
+  - Filter application respects FSM states and doesn't bypass state management
+  - Automatic filter refresh when new repositories are loaded
+- **StateManager**: Added filter metadata tracking for FSM-first approach
+  - New filter metadata storage and management methods
+  - Repository matching logic integrated with FSM state system
+  - Consistent filtering behavior across frontend and backend
+
+### Technical
+- **Progressive Loading Integration**: Filter system works seamlessly with existing progressive repository loading
+- **Session Storage**: Filter preferences persist across page refreshes using sessionStorage
+- **Event-Driven**: Uses custom 'sbi:repositories_loaded' event for filter initialization
+- **Performance Optimized**: Client-side filtering provides instant results without additional GitHub API calls
+
 ## [1.0.38] - 2024-12-29
 
 ### Fixed

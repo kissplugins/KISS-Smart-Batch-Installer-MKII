@@ -189,28 +189,6 @@ class Plugin extends BasePlugin {
         );
         wp_enqueue_style( 'sbi-admin' );
 
-        // Register and enqueue admin JavaScript
-        wp_register_script(
-            'sbi-admin',
-            $this->plugin_url . 'assets/admin.js',
-            [ 'jquery' ],
-            $this->version,
-            true
-        );
-        wp_enqueue_script( 'sbi-admin' );
-
-        // Localize script with AJAX data
-        wp_localize_script( 'sbi-admin', 'sbiAjax', [
-            'ajaxurl' => admin_url( 'admin-ajax.php' ),
-            'nonce' => wp_create_nonce( 'sbi_ajax_nonce' ),
-            'sseEnabled' => (bool) get_option( 'sbi_sse_diagnostics', false ),
-            'strings' => [
-                'loading' => __( 'Loading...', 'kiss-smart-batch-installer' ),
-                'error' => __( 'An error occurred', 'kiss-smart-batch-installer' ),
-                'success' => __( 'Success', 'kiss-smart-batch-installer' ),
-            ]
-        ] );
-
         // Enqueue TS bridge (module) to expose typed handlers to classic admin.js
         $ts_index_url = $this->plugin_url . 'dist/ts/index.js';
         wp_register_script(
@@ -229,6 +207,28 @@ class Plugin extends BasePlugin {
             'indexUrl' => $ts_index_url,
         ] );
         wp_enqueue_script( 'sbi-ts-bridge' );
+
+        // Register and enqueue admin JavaScript - depends on TS bridge
+        wp_register_script(
+            'sbi-admin',
+            $this->plugin_url . 'assets/admin.js',
+            [ 'jquery', 'sbi-ts-bridge' ],
+            $this->version,
+            true
+        );
+        wp_enqueue_script( 'sbi-admin' );
+
+        // Localize script with AJAX data
+        wp_localize_script( 'sbi-admin', 'sbiAjax', [
+            'ajaxurl' => admin_url( 'admin-ajax.php' ),
+            'nonce' => wp_create_nonce( 'sbi_ajax_nonce' ),
+            'sseEnabled' => (bool) get_option( 'sbi_sse_diagnostics', false ),
+            'strings' => [
+                'loading' => __( 'Loading...', 'kiss-smart-batch-installer' ),
+                'error' => __( 'An error occurred', 'kiss-smart-batch-installer' ),
+                'success' => __( 'Success', 'kiss-smart-batch-installer' ),
+            ]
+        ] );
 
     }
 

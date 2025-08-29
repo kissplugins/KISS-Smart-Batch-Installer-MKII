@@ -54,6 +54,14 @@ class StateManager {
     private array $state_metadata = [];
 
     /**
+     * Filter metadata for FSM-first repository filtering.
+     * Tracks filter state and application history.
+     *
+     * @var array
+     */
+    private array $filter_metadata = [];
+
+    /**
      * Allowed transitions cache.
      *
      * @var array<string, array<string>>
@@ -900,5 +908,86 @@ class StateManager {
         }
 
         return $stats;
+    }
+
+    // 🔍 FSM-FIRST REPOSITORY FILTERING METHODS
+
+    /**
+     * Set filter metadata for FSM-first filtering approach.
+     *
+     * @param array $filter_data Filter metadata to store.
+     */
+    public function set_filter_metadata(array $filter_data): void {
+        $this->filter_metadata = array_merge($this->filter_metadata, $filter_data);
+    }
+
+    /**
+     * Get current filter metadata.
+     *
+     * @param string|null $key Specific metadata key to retrieve.
+     * @return mixed Filter metadata value or array of all metadata.
+     */
+    public function get_filter_metadata(?string $key = null) {
+        if ($key !== null) {
+            return $this->filter_metadata[$key] ?? null;
+        }
+        return $this->filter_metadata;
+    }
+
+    /**
+     * Clear filter metadata.
+     */
+    public function clear_filter_metadata(): void {
+        $this->filter_metadata = [];
+    }
+
+    /**
+     * Check if a repository matches the current filter criteria.
+     * Used by frontend FSM for consistent filtering logic.
+     *
+     * @param string $repository Repository identifier.
+     * @param string $search_term Search term to match against.
+     * @return bool True if repository matches filter.
+     */
+    public function repository_matches_filter(string $repository, string $search_term): bool {
+        if (empty($search_term)) {
+            return true;
+        }
+
+        $search_lower = strtolower(trim($search_term));
+        $repo_lower = strtolower($repository);
+
+        // Split repository into owner/name parts
+        $parts = explode('/', $repository);
+        $owner = $parts[0] ?? '';
+        $name = $parts[1] ?? '';
+
+        // Match against repository name, owner, or full name
+        return strpos($repo_lower, $search_lower) !== false ||
+               strpos(strtolower($name), $search_lower) !== false ||
+               strpos(strtolower($owner), $search_lower) !== false;
+    }
+
+    /**
+     * Get filtered repository list based on current filter metadata.
+     * Maintains FSM state integrity while filtering display.
+     *
+     * @return array Array of repository identifiers that match current filter.
+     */
+    public function get_filtered_repositories(): array {
+        $search_term = $this->get_filter_metadata('search_term');
+
+        if (empty($search_term)) {
+            return array_keys($this->states);
+        }
+
+        $filtered = [];
+        foreach (array_keys($this->states) as $repository) {
+            if ($this->repository_matches_filter($repository, $search_term)) {
+                $filtered[] = $repository;
+            }
+        }
+
+        return $filtered;
     }
 }
