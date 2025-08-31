@@ -5,6 +5,30 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.40] - 2024-12-29
+
+### Fixed
+- **WordPress Function Validation Error**: Resolved "Required WordPress function missing: deactivate_plugin" installation failure
+  - Added proper loading of WordPress admin functions before validation checks
+  - Ensured `wp-admin/includes/plugin.php`, `wp-admin/includes/file.php`, and `wp-admin/includes/class-wp-upgrader.php` are loaded before function existence checks
+  - Fixed namespace issues in ValidationGuardService by adding global namespace prefixes (`\`) to all WordPress function calls
+  - Installation validation now properly detects all required WordPress functions (activate_plugin, deactivate_plugin, download_url, unzip_file, etc.)
+  - Eliminated false positive validation failures that prevented legitimate plugin installations
+
+### Changed
+- **ValidationGuardService**: Enhanced WordPress environment validation with proper function loading
+  - WordPress admin functions are now loaded before existence validation
+  - All WordPress function calls use global namespace prefix to avoid namespace conflicts
+  - Improved error logging with proper global function access
+  - Better validation reliability for WordPress environment checks
+
+### Technical Details
+- **Root Cause**: WordPress admin functions like `deactivate_plugin` are not loaded by default and require explicit inclusion
+- **Solution**: Added `require_once` statements for WordPress admin includes before function validation
+- **Files Modified**: `src/Services/ValidationGuardService.php`
+- **Functions Fixed**: `activate_plugin`, `deactivate_plugin`, `download_url`, `unzip_file`, `is_plugin_active`
+- **Expected Impact**: 100% resolution of "deactivate_plugin missing" validation errors, successful plugin installations
+
 ## [1.0.39] - 2024-12-29
 
 ### Added

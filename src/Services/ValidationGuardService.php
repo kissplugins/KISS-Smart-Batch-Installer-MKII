@@ -12,6 +12,14 @@ namespace SBI\Services;
 
 use SBI\Enums\PluginState;
 
+// Ensure WordPress functions are available globally
+if ( ! function_exists( 'current_user_can' ) ) {
+    require_once \ABSPATH . 'wp-includes/capabilities.php';
+}
+if ( ! function_exists( 'is_user_logged_in' ) ) {
+    require_once \ABSPATH . 'wp-includes/user.php';
+}
+
 /**
  * Validation Guard Service for Error Prevention
  */
@@ -181,16 +189,16 @@ class ValidationGuardService {
         ];
 
         foreach ( $required_caps as $cap => $description ) {
-            $has_cap = current_user_can( $cap );
+            $has_cap = \current_user_can( $cap );
             $capabilities[ $cap ] = $has_cap;
-            
+
             if ( ! $has_cap ) {
                 $errors[] = "Missing required capability: {$description} ({$cap})";
             }
         }
 
         // Check if user is logged in
-        if ( ! is_user_logged_in() ) {
+        if ( ! \is_user_logged_in() ) {
             $errors[] = 'User must be logged in';
         }
 
@@ -198,9 +206,9 @@ class ValidationGuardService {
             'success' => empty( $errors ),
             'errors' => $errors,
             'details' => [
-                'user_id' => get_current_user_id(),
+                'user_id' => \get_current_user_id(),
                 'capabilities' => $capabilities,
-                'is_logged_in' => is_user_logged_in()
+                'is_logged_in' => \is_user_logged_in()
             ]
         ];
     }
@@ -215,7 +223,7 @@ class ValidationGuardService {
         $warnings = [];
 
         // Check memory limit
-        $memory_limit = $this->parse_memory_limit( ini_get( 'memory_limit' ) );
+        $memory_limit = $this->parse_memory_limit( \ini_get( 'memory_limit' ) );
         $required_memory = self::REQUIRED_MEMORY_MB * 1024 * 1024; // Convert to bytes
 
         if ( $memory_limit > 0 && $memory_limit < $required_memory ) {
@@ -227,9 +235,9 @@ class ValidationGuardService {
         }
 
         // Check disk space
-        $upload_dir = wp_upload_dir();
+        $upload_dir = \wp_upload_dir();
         if ( ! $upload_dir['error'] ) {
-            $free_space = disk_free_space( $upload_dir['basedir'] );
+            $free_space = \disk_free_space( $upload_dir['basedir'] );
             $required_space = self::REQUIRED_DISK_SPACE_MB * 1024 * 1024; // Convert to bytes
 
             if ( $free_space !== false && $free_space < $required_space ) {
@@ -242,7 +250,7 @@ class ValidationGuardService {
         }
 
         // Check execution time limit
-        $max_execution_time = ini_get( 'max_execution_time' );
+        $max_execution_time = \ini_get( 'max_execution_time' );
         if ( $max_execution_time > 0 && $max_execution_time < 60 ) {
             $warnings[] = sprintf(
                 'Low execution time limit: %d seconds (recommended: 60+ seconds)',
@@ -255,7 +263,7 @@ class ValidationGuardService {
             'errors' => $errors,
             'warnings' => $warnings,
             'details' => [
-                'memory_limit' => ini_get( 'memory_limit' ),
+                'memory_limit' => \ini_get( 'memory_limit' ),
                 'memory_limit_bytes' => $memory_limit,
                 'disk_free_space' => $free_space ?? 'unknown',
                 'max_execution_time' => $max_execution_time
@@ -362,6 +370,17 @@ class ValidationGuardService {
             );
         }
 
+        // Ensure WordPress admin functions are loaded before checking
+        if ( ! \function_exists( 'activate_plugin' ) ) {
+            require_once \ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        if ( ! \function_exists( 'download_url' ) ) {
+            require_once \ABSPATH . 'wp-admin/includes/file.php';
+        }
+        if ( ! \class_exists( 'WP_Upgrader' ) ) {
+            require_once \ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        }
+
         // Check if required WordPress functions exist
         $required_functions = [
             'wp_remote_get',
@@ -373,31 +392,31 @@ class ValidationGuardService {
         ];
 
         foreach ( $required_functions as $function ) {
-            if ( ! function_exists( $function ) ) {
+            if ( ! \function_exists( $function ) ) {
                 $errors[] = "Required WordPress function missing: {$function}";
             }
         }
 
         // Check if WordPress is in maintenance mode
-        if ( file_exists( ABSPATH . '.maintenance' ) ) {
+        if ( \file_exists( \ABSPATH . '.maintenance' ) ) {
             $errors[] = 'WordPress is in maintenance mode';
         }
 
         // Check if plugins directory is writable
-        $plugins_dir = WP_PLUGIN_DIR;
-        if ( ! is_writable( $plugins_dir ) ) {
+        $plugins_dir = \WP_PLUGIN_DIR;
+        if ( ! \is_writable( $plugins_dir ) ) {
             $errors[] = 'Plugins directory is not writable';
         }
 
         // Log WordPress validation details for debugging
         if ( ! empty( $errors ) ) {
-            error_log( sprintf(
+            \error_log( sprintf(
                 'SBI WordPress Validation Failed: %s. Details: WP Version: %s, Plugins Dir: %s, Writable: %s, Maintenance: %s',
                 implode( '; ', $errors ),
                 $wp_version,
                 $plugins_dir,
-                is_writable( $plugins_dir ) ? 'yes' : 'no',
-                file_exists( ABSPATH . '.maintenance' ) ? 'yes' : 'no'
+                \is_writable( $plugins_dir ) ? 'yes' : 'no',
+                \file_exists( \ABSPATH . '.maintenance' ) ? 'yes' : 'no'
             ) );
         }
 
@@ -408,8 +427,8 @@ class ValidationGuardService {
             'details' => [
                 'wp_version' => $wp_version,
                 'plugins_dir' => $plugins_dir,
-                'plugins_dir_writable' => is_writable( $plugins_dir ),
-                'maintenance_mode' => file_exists( ABSPATH . '.maintenance' )
+                'plugins_dir_writable' => \is_writable( $plugins_dir ),
+                'maintenance_mode' => \file_exists( \ABSPATH . '.maintenance' )
             ]
         ];
     }
@@ -637,18 +656,18 @@ class ValidationGuardService {
         }
 
         if ( ! empty( $plugin_file ) ) {
-            $full_path = WP_PLUGIN_DIR . '/' . $plugin_file;
+            $full_path = \WP_PLUGIN_DIR . '/' . $plugin_file;
 
-            if ( ! file_exists( $full_path ) ) {
+            if ( ! \file_exists( $full_path ) ) {
                 $errors[] = 'Plugin file does not exist';
             }
 
-            if ( ! is_readable( $full_path ) ) {
+            if ( ! \is_readable( $full_path ) ) {
                 $errors[] = 'Plugin file is not readable';
             }
 
             // Check if already active
-            if ( function_exists( 'is_plugin_active' ) && is_plugin_active( $plugin_file ) ) {
+            if ( \function_exists( 'is_plugin_active' ) && \is_plugin_active( $plugin_file ) ) {
                 $errors[] = 'Plugin is already active';
             }
         }
@@ -659,8 +678,8 @@ class ValidationGuardService {
             'details' => [
                 'plugin_file' => $plugin_file,
                 'full_path' => $full_path ?? null,
-                'exists' => isset( $full_path ) ? file_exists( $full_path ) : false,
-                'readable' => isset( $full_path ) ? is_readable( $full_path ) : false
+                'exists' => isset( $full_path ) ? \file_exists( $full_path ) : false,
+                'readable' => isset( $full_path ) ? \is_readable( $full_path ) : false
             ]
         ];
     }
