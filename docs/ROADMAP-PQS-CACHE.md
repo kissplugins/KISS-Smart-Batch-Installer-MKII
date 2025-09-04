@@ -1,9 +1,3 @@
-You are correct. To ensure the best chance of success, you should first **verify the status of the PQS plugin** and its cache before starting the integration work on the Smart Batch Installer. If the PQS plugin isn't generating a reliable cache, the SBI integration will not work.
-
-Here is the updated document with a high-level, actionable checklist to guide the development process for both plugins.
-
-***
-
 # PQS Cache FSM Re-integration Plan (Revised)
 
 ## 🎯 **Overview**
