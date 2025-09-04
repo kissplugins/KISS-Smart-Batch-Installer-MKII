@@ -5,9 +5,92 @@ All notable changes to the KISS Smart Batch Installer will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.40] - 2024-12-29
+
+### Fixed
+- **WordPress Function Validation Error**: Resolved "Required WordPress function missing: deactivate_plugin" installation failure
+  - Added proper loading of WordPress admin functions before validation checks
+  - Ensured `wp-admin/includes/plugin.php`, `wp-admin/includes/file.php`, and `wp-admin/includes/class-wp-upgrader.php` are loaded before function existence checks
+  - Fixed namespace issues in ValidationGuardService by adding global namespace prefixes (`\`) to all WordPress function calls
+  - Installation validation now properly detects all required WordPress functions (activate_plugin, deactivate_plugin, download_url, unzip_file, etc.)
+  - Eliminated false positive validation failures that prevented legitimate plugin installations
+
+### Changed
+- **ValidationGuardService**: Enhanced WordPress environment validation with proper function loading
+  - WordPress admin functions are now loaded before existence validation
+  - All WordPress function calls use global namespace prefix to avoid namespace conflicts
+  - Improved error logging with proper global function access
+  - Better validation reliability for WordPress environment checks
+
+### Technical Details
+- **Root Cause**: WordPress admin functions like `deactivate_plugin` are not loaded by default and require explicit inclusion
+- **Solution**: Added `require_once` statements for WordPress admin includes before function validation
+- **Files Modified**: `src/Services/ValidationGuardService.php`
+- **Functions Fixed**: `activate_plugin`, `deactivate_plugin`, `download_url`, `unzip_file`, `is_plugin_active`
+- **Expected Impact**: 100% resolution of "deactivate_plugin missing" validation errors, successful plugin installations
+
+## [1.0.39] - 2024-12-29
+
+### Added
+- **FSM-First Repository Filtering**: Client-side repository search and filtering capability
+  - Added search input field and "Clear Filter" button to repository list interface
+  - Implemented session-persistent filtering that survives page refreshes
+  - FSM-centric approach maintains all repository states while filtering display
+  - Honors repository limits - filters only within loaded repositories (no additional API calls)
+  - Real-time filtering with 300ms debouncing for optimal performance
+  - Filter status display shows "Showing X of Y repositories" when active
+
+### Changed
+- **RepositoryFSM**: Enhanced with comprehensive filtering state management
+  - Added FilterState interface with search term, matched repositories, and session persistence
+  - Implemented filter methods: setFilter(), clearFilter(), refreshFilter(), loadFilterFromSession()
+  - Filter application respects FSM states and doesn't bypass state management
+  - Automatic filter refresh when new repositories are loaded
+- **StateManager**: Added filter metadata tracking for FSM-first approach
+  - New filter metadata storage and management methods
+  - Repository matching logic integrated with FSM state system
+  - Consistent filtering behavior across frontend and backend
+
+### Technical
+- **Progressive Loading Integration**: Filter system works seamlessly with existing progressive repository loading
+- **Session Storage**: Filter preferences persist across page refreshes using sessionStorage
+- **Event-Driven**: Uses custom 'sbi:repositories_loaded' event for filter initialization
+- **Performance Optimized**: Client-side filtering provides instant results without additional GitHub API calls
+
+## [1.0.38] - 2024-12-29
+
+### Fixed
+- **Validation Error Debugging**: Enhanced validation failure messages with specific error details
+  - Replaced generic "Failed validations: Wordpress" with detailed error breakdown
+  - Added specific WordPress validation failure details (version, functions, directory permissions)
+  - Enhanced error messages to show exact validation failures (e.g., "Wordpress: Required WordPress function missing: download_url")
+  - Added comprehensive logging for WordPress environment validation failures
+
+### Changed
+- **ValidationGuardService**: More granular validation error reporting
+  - WordPress validation now logs specific failure details (WP version, plugins directory, writability, maintenance mode)
+  - Enhanced error message construction to include specific validation failure details
+  - Improved debugging for installation prerequisite failures
+
+## [1.0.37] - 2024-12-29
+
+### Fixed
+- **Security Error Debugging**: Enhanced security check failure messages with detailed debugging
+  - Replaced generic "Security check failed" with specific error types
+  - Added detailed logging for nonce validation failures (nonce value, action, user ID, referer)
+  - Added detailed logging for capability check failures (user ID, roles, required capability)
+  - Enhanced error guidance with specific recovery steps for nonce and permission issues
+  - Improved error type detection to distinguish between nonce failures and permission issues
+
+### Changed
+- **AjaxHandler Security Validation**: More granular security error reporting
+  - `verify_nonce_and_capability()` now provides specific error messages for nonce vs capability failures
+  - Added comprehensive logging for security validation success and failure cases
+  - Enhanced error guidance system with technical details for troubleshooting
+
 ## [1.0.36] - 2024-12-29
 
-#### Future Integration Discovery for Git Updater
+### Future Integration Discovery for Git Updater
 
 ### Added
 - Added Doc with Git Updater in /docs/PROJECT-KISS-SBI-INTEGRATION.md

@@ -3,7 +3,7 @@
  * Plugin Name: NHK Smart Batch Installer
  * Plugin URI: https://github.com/sbi/kiss-smart-batch-installer
  * Description: NHK/KISS (Keep It Simple, Stupid) batch installer using NHK framework for WordPress plugins from GitHub repositories with smart detection and PQS integration.
- * Version: 1.0.36
+ * Version: 1.0.39
  * Author: KISS Plugins
  * Author URI: https://sbi.local
  * License: GPL v2 or later

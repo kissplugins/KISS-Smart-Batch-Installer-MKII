@@ -545,9 +545,18 @@ class AjaxHandler {
                     }
                 }
 
+                // Build detailed error message with specific failures
+                $error_details_text = [];
+                foreach ( $error_details as $category => $errors ) {
+                    if ( ! empty( $errors ) ) {
+                        $error_details_text[] = sprintf( '%s: %s', ucfirst( $category ), implode( '; ', $errors ) );
+                    }
+                }
+
                 $detailed_message = sprintf(
-                    'Installation prerequisites not met. Failed validations: %s',
-                    implode( ', ', $failed_validations )
+                    'Installation prerequisites not met. Failed validations: %s. Details: %s',
+                    implode( ', ', $failed_validations ),
+                    implode( ' | ', $error_details_text )
                 );
 
                 // Add specific error details to debug steps
@@ -1281,22 +1290,68 @@ class AjaxHandler {
     }
 
     /**
-     * Verify nonce and user capability.
+     * Verify nonce and user capability with detailed debugging.
      */
     private function verify_nonce_and_capability(): void {
-        if ( ! check_ajax_referer( 'sbi_ajax_nonce', 'nonce', false ) ) {
+        // Enhanced nonce validation with debugging
+        $nonce_value = $_POST['nonce'] ?? '';
+        $nonce_valid = check_ajax_referer( 'sbi_ajax_nonce', 'nonce', false );
+
+        if ( ! $nonce_valid ) {
+            // Log detailed nonce failure information
+            error_log( sprintf(
+                'SBI Security: Nonce validation failed. Nonce: %s, Action: %s, User ID: %d, Referer: %s',
+                $nonce_value ? substr($nonce_value, 0, 8) . '...' : 'empty',
+                $_POST['action'] ?? 'unknown',
+                get_current_user_id(),
+                $_SERVER['HTTP_REFERER'] ?? 'unknown'
+            ) );
+
             $this->send_enhanced_error(
-                __( 'Security check failed.', 'kiss-smart-batch-installer' ),
-                [ 'error_code' => 'security_check_failed' ]
+                __( 'Security check failed: Invalid security token (nonce). Please refresh the page and try again.', 'kiss-smart-batch-installer' ),
+                [
+                    'error_code' => 'nonce_verification_failed',
+                    'security_issue' => 'nonce',
+                    'nonce_provided' => !empty($nonce_value),
+                    'action' => $_POST['action'] ?? 'unknown',
+                    'user_id' => get_current_user_id()
+                ]
             );
         }
 
-        if ( ! current_user_can( 'install_plugins' ) ) {
+        // Enhanced capability check with debugging
+        $user_id = get_current_user_id();
+        $can_install = current_user_can( 'install_plugins' );
+        $user_roles = wp_get_current_user()->roles ?? [];
+
+        if ( ! $can_install ) {
+            // Log detailed capability failure information
+            error_log( sprintf(
+                'SBI Security: Capability check failed. User ID: %d, Roles: %s, Required: install_plugins',
+                $user_id,
+                implode(', ', $user_roles)
+            ) );
+
             $this->send_enhanced_error(
-                __( 'Insufficient permissions.', 'kiss-smart-batch-installer' ),
-                [ 'error_code' => 'insufficient_permissions', 'required_capability' => 'install_plugins' ]
+                __( 'Security check failed: Insufficient permissions to install plugins. Contact your administrator.', 'kiss-smart-batch-installer' ),
+                [
+                    'error_code' => 'insufficient_permissions',
+                    'security_issue' => 'capability',
+                    'required_capability' => 'install_plugins',
+                    'user_id' => $user_id,
+                    'user_roles' => $user_roles,
+                    'has_capability' => $can_install
+                ]
             );
         }
+
+        // Log successful security validation
+        error_log( sprintf(
+            'SBI Security: Validation passed. User ID: %d, Roles: %s, Action: %s',
+            $user_id,
+            implode(', ', $user_roles),
+            $_POST['action'] ?? 'unknown'
+        ) );
     }
 
     /**
@@ -1357,9 +1412,11 @@ class AjaxHandler {
         if ( strpos( $lower_message, 'memory' ) !== false ) return 'memory';
         if ( strpos( $lower_message, 'fatal' ) !== false ) return 'fatal';
 
-        // Security errors
+        // Security errors (specific types for better guidance)
+        if ( strpos( $lower_message, 'security token' ) !== false || strpos( $lower_message, 'invalid security token' ) !== false ) return 'nonce_verification_failed';
+        if ( strpos( $lower_message, 'insufficient permissions' ) !== false ) return 'insufficient_permissions';
+        if ( strpos( $lower_message, 'nonce' ) !== false ) return 'nonce_verification_failed';
         if ( strpos( $lower_message, 'security' ) !== false ) return 'security';
-        if ( strpos( $lower_message, 'nonce' ) !== false ) return 'security';
 
         return 'generic';
     }
@@ -1468,6 +1525,40 @@ class AjaxHandler {
                         'Ensure you have the required capabilities'
                     ],
                     'required_capability' => $context['required_capability'] ?? 'install_plugins'
+                ];
+
+            case 'security':
+            case 'nonce_verification_failed':
+                return [
+                    'title' => 'Security Token Error',
+                    'description' => 'The security token (nonce) is invalid or expired.',
+                    'actions' => [
+                        'Refresh the page and try again',
+                        'Clear your browser cache if the problem persists',
+                        'Log out and log back in if refreshing doesn\'t help'
+                    ],
+                    'technical_details' => [
+                        'nonce_provided' => $context['nonce_provided'] ?? false,
+                        'action' => $context['action'] ?? 'unknown',
+                        'user_id' => $context['user_id'] ?? 0
+                    ]
+                ];
+
+            case 'insufficient_permissions':
+                $user_roles = $context['user_roles'] ?? [];
+                return [
+                    'title' => 'Insufficient Permissions',
+                    'description' => 'Your user account does not have permission to install plugins.',
+                    'actions' => [
+                        'Contact your WordPress administrator to grant plugin installation permissions',
+                        'Ensure your user role includes the "install_plugins" capability',
+                        'Administrator or Super Admin roles are typically required'
+                    ],
+                    'technical_details' => [
+                        'required_capability' => $context['required_capability'] ?? 'install_plugins',
+                        'user_roles' => $user_roles,
+                        'user_id' => $context['user_id'] ?? 0
+                    ]
                 ];
 
             case 'network':

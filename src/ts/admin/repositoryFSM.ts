@@ -29,6 +29,15 @@ interface ErrorContext {
   };
 }
 
+// Filter state for FSM-first repository filtering
+interface FilterState {
+  searchTerm: string;
+  isActive: boolean;
+  matchedRepositories: Set<RepoId>;
+  appliedAt: number;
+  sessionKey: string;
+}
+
 /**
  * ⚠️  CRITICAL FSM CORE CLASS - DO NOT REFACTOR WITHOUT CAREFUL CONSIDERATION ⚠️
  *
@@ -76,6 +85,17 @@ export class RepositoryFSM {
   // Changes affect user experience during transient errors
   private maxRetries = 3;
   private retryDelayMs = 5000;
+
+  // 🔍 FILTER STATE - FSM-FIRST REPOSITORY FILTERING ⚠️
+  // Manages client-side filtering while maintaining FSM state integrity
+  // All repositories maintain their FSM states regardless of filter visibility
+  private filterState: FilterState = {
+    searchTerm: '',
+    isActive: false,
+    matchedRepositories: new Set(),
+    appliedAt: 0,
+    sessionKey: 'sbi_repository_filter'
+  };
 
   /**
    * ⚠️ CRITICAL LISTENER REGISTRATION - DO NOT MODIFY ⚠️
@@ -308,6 +328,8 @@ export class RepositoryFSM {
       }
     } catch {}
   }
+
+
 
   // Helper method to check if a repository is in a specific state
   isInState(repo: RepoId, state: PluginState): boolean {
@@ -873,6 +895,168 @@ export class RepositoryFSM {
     if (minutes < 60) return `${minutes}m ago`;
     const hours = Math.floor(minutes / 60);
     return `${hours}h ago`;
+  }
+
+  // 🔍 FSM-FIRST REPOSITORY FILTERING METHODS
+
+  /**
+   * Set repository filter (FSM-first approach)
+   * Maintains all repository states while filtering display
+   */
+  setFilter(searchTerm: string): void {
+    const normalizedTerm = searchTerm.trim().toLowerCase();
+
+    this.filterState = {
+      searchTerm: normalizedTerm,
+      isActive: normalizedTerm.length > 0,
+      matchedRepositories: new Set(),
+      appliedAt: Date.now(),
+      sessionKey: this.filterState.sessionKey
+    };
+
+    if (this.filterState.isActive) {
+      // Find matching repositories from current FSM state
+      for (const [repo] of this.states) {
+        if (this.matchesFilter(repo, normalizedTerm)) {
+          this.filterState.matchedRepositories.add(repo);
+        }
+      }
+    }
+
+    // Save to session storage for persistence
+    this.saveFilterToSession();
+
+    // Apply filter to UI
+    this.applyFilterToUI();
+  }
+
+  /**
+   * Clear repository filter
+   */
+  clearFilter(): void {
+    this.filterState = {
+      searchTerm: '',
+      isActive: false,
+      matchedRepositories: new Set(),
+      appliedAt: Date.now(),
+      sessionKey: this.filterState.sessionKey
+    };
+
+    // Clear session storage
+    this.clearFilterFromSession();
+
+    // Show all repositories
+    this.applyFilterToUI();
+  }
+
+  /**
+   * Get current filter state
+   */
+  getFilterState(): Readonly<FilterState> {
+    return { ...this.filterState };
+  }
+
+  /**
+   * Check if repository matches filter criteria
+   */
+  private matchesFilter(repo: RepoId, searchTerm: string): boolean {
+    if (!searchTerm) return true;
+
+    const repoLower = repo.toLowerCase();
+    const [owner, name] = repo.split('/');
+
+    // Match against repository name, owner, or full name
+    return repoLower.includes(searchTerm) ||
+           name?.toLowerCase().includes(searchTerm) ||
+           owner?.toLowerCase().includes(searchTerm);
+  }
+
+  /**
+   * Apply filter to UI (show/hide repository rows)
+   */
+  private applyFilterToUI(): void {
+    const rows = document.querySelectorAll('[data-repository]') as NodeListOf<HTMLTableRowElement>;
+
+    rows.forEach(row => {
+      const repo = row.dataset.repository;
+      if (!repo) return;
+
+      const shouldShow = !this.filterState.isActive || this.filterState.matchedRepositories.has(repo);
+      row.style.display = shouldShow ? '' : 'none';
+    });
+
+    // Update filter status display
+    this.updateFilterStatusDisplay();
+  }
+
+  /**
+   * Update filter status display in UI
+   */
+  private updateFilterStatusDisplay(): void {
+    const statusElement = document.querySelector('.sbi-filter-status') as HTMLElement;
+    if (!statusElement) return;
+
+    if (this.filterState.isActive) {
+      const matchCount = this.filterState.matchedRepositories.size;
+      const totalCount = this.states.size;
+      statusElement.textContent = `Showing ${matchCount} of ${totalCount} repositories`;
+      statusElement.style.display = 'block';
+    } else {
+      statusElement.style.display = 'none';
+    }
+  }
+
+  /**
+   * Save filter state to session storage
+   */
+  private saveFilterToSession(): void {
+    try {
+      const filterData = {
+        searchTerm: this.filterState.searchTerm,
+        appliedAt: this.filterState.appliedAt
+      };
+      sessionStorage.setItem(this.filterState.sessionKey, JSON.stringify(filterData));
+    } catch (error) {
+      console.warn('Failed to save filter to session storage:', error);
+    }
+  }
+
+  /**
+   * Load filter state from session storage
+   */
+  loadFilterFromSession(): void {
+    try {
+      const stored = sessionStorage.getItem(this.filterState.sessionKey);
+      if (stored) {
+        const filterData = JSON.parse(stored);
+        if (filterData.searchTerm) {
+          this.setFilter(filterData.searchTerm);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load filter from session storage:', error);
+    }
+  }
+
+  /**
+   * Clear filter from session storage
+   */
+  private clearFilterFromSession(): void {
+    try {
+      sessionStorage.removeItem(this.filterState.sessionKey);
+    } catch (error) {
+      console.warn('Failed to clear filter from session storage:', error);
+    }
+  }
+
+  /**
+   * Re-apply filter when new repositories are added to FSM
+   * Called after repository list updates
+   */
+  refreshFilter(): void {
+    if (this.filterState.isActive) {
+      this.setFilter(this.filterState.searchTerm);
+    }
   }
 }
 
