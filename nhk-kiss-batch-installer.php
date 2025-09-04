@@ -36,6 +36,18 @@
 // Prevent direct access
 defined( 'ABSPATH' ) || exit;
 
+// Include the Plugin Update Checker
+require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$update_checker = PucFactory::buildUpdateChecker(
+    'https://github.com/kissplugins/KISS-Smart-Batch-Installer-MKII',
+    __FILE__,
+    'kiss-smart-batch-installer'
+);
+// Optional: Set the branch that contains the stable release.
+$update_checker->setBranch( 'main' );
+
 // Plugin constants
 define( 'GBI_VERSION', '1.0.31' );
 define( 'GBI_FILE', __FILE__ );
